@@ -35,7 +35,11 @@ class CerraDataset(Dataset):
         
         # Find all image files
         self.images_dir = self.data_dir / "msi_images"
-        self.labels_dir = self.data_dir / "semantic_14c"
+        # Set labels directory based on label level
+        if label_level == 'L2':
+            self.labels_dir = self.data_dir / "semantic_14c"
+        else:  # L1
+            self.labels_dir = self.data_dir / "semantic_7c"
         
         # Get all image files
         image_files = list(self.images_dir.glob("*.tif"))
@@ -100,7 +104,13 @@ class CerraDataset(Dataset):
             image = image.astype(np.float32)
         
         # Load label
-        label_path = self.labels_dir / f"{img_path.stem}_label_{self.label_level.lower()}.tif"
+        # Extract the numeric ID from the image filename (e.g., "parrot_beak_ms_42312" -> "42312")
+        img_id = img_path.stem.split('_')[-1]
+        if self.label_level == 'L2':
+            label_filename = f"parrot_beak_terraclass_classes_14c_{img_id}.tif"
+        else:  # L1
+            label_filename = f"parrot_beak_terraclass_classes_7c_{img_id}.tif"
+        label_path = self.labels_dir / label_filename
         with rasterio.open(label_path) as src:
             label = src.read(1)  # Shape: (H, W)
             label = label.astype(np.int64)
