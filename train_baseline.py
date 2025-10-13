@@ -116,7 +116,7 @@ def train_baseline(
         log_every_n_steps=50,
         val_check_interval=1.0,
         precision=16 if use_gpu else 32,  # Use mixed precision on GPU
-        deterministic=True,  # For reproducible results
+        deterministic=False,  # Disabled due to CUDA cross_entropy determinism issue
         sync_batchnorm=True if (use_gpu and len(devices) > 1) else False  # Sync batch norm for multi-GPU
     )
     
