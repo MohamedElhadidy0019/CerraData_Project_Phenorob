@@ -34,8 +34,8 @@ class CerraDataset(Dataset):
         self.transform = transform
         
         # Find all image files
-        self.images_dir = self.data_dir / "multispectral"
-        self.labels_dir = self.data_dir / "labels"
+        self.images_dir = self.data_dir / "msi_images"
+        self.labels_dir = self.data_dir / "semantic_14c"
         
         # Get all image files
         image_files = list(self.images_dir.glob("*.tif"))
