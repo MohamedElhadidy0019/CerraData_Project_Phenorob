@@ -1,2 +1,8 @@
 # all in kaggle_temp
 kaggle_temp/
+# whats in checkpoints
+checkpoints/
+logs/
+*.pyc
+__pycache__/
+
