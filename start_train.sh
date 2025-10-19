@@ -6,4 +6,4 @@ python train_baseline.py \
     --num_epochs 1000 \
     --dropout_rate 0.3 \
     --weight_decay 1e-3 \
-    --experiment_name "unet_resnet34_dropout_wd1e3"[00
+    --experiment_name "unet_resnet34_dropout_wd1e3_dropout"
