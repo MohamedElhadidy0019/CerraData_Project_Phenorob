@@ -18,10 +18,13 @@ def train_baseline(
     batch_size=16,
     num_epochs=100,
     learning_rate=1e-3,
+    dropout_rate=0.3,
+    weight_decay=1e-3,
     num_workers=4,
     gpu_ids=None,
     checkpoint_dir="./checkpoints",
-    log_dir="./logs"
+    log_dir="./logs",
+    experiment_name=None
 ):
     """Train baseline model with random initialization on 14-class segmentation"""
     
@@ -29,6 +32,8 @@ def train_baseline(
     print(f"Data directory: {data_dir}")
     print(f"Batch size: {batch_size}")
     print(f"Learning rate: {learning_rate}")
+    print(f"Dropout rate: {dropout_rate}")
+    print(f"Weight decay: {weight_decay}")
     print(f"Max epochs: {num_epochs}")
     print(f"GPU IDs: {gpu_ids}")
     
@@ -67,7 +72,9 @@ def train_baseline(
         in_channels=12,
         num_classes=14,
         encoder_name="resnet34",
-        learning_rate=learning_rate
+        learning_rate=learning_rate,
+        dropout_rate=dropout_rate,
+        weight_decay=weight_decay
     )
     
     print(f"Model parameters: {sum(p.numel() for p in model.parameters()):,}")
@@ -79,7 +86,10 @@ def train_baseline(
     
     # Setup callbacks
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    experiment_name = f"baseline_l2_14class_{timestamp}"
+    if experiment_name is None:
+        experiment_name = f"baseline_l2_14class_dropout_{timestamp}"
+    else:
+        experiment_name = f"{experiment_name}_{timestamp}"
     
     checkpoint_callback = ModelCheckpoint(
         dirpath=os.path.join(checkpoint_dir, experiment_name),
@@ -146,6 +156,8 @@ def train_baseline(
         f.write(f"Test samples: {len(test_loader.dataset)}\n")
         f.write(f"Batch size: {batch_size}\n")
         f.write(f"Learning rate: {learning_rate}\n")
+        f.write(f"Dropout rate: {dropout_rate}\n")
+        f.write(f"Weight decay: {weight_decay}\n")
         f.write(f"Total epochs: {trainer.current_epoch + 1}\n")
         f.write(f"Best checkpoint: {checkpoint_callback.best_model_path}\n")
         f.write(f"Final validation loss: {trainer.callback_metrics.get('val_loss', 'N/A')}\n")
@@ -168,6 +180,10 @@ def main():
                         help='Maximum number of epochs')
     parser.add_argument('--learning_rate', type=float, default=1e-3,
                         help='Learning rate')
+    parser.add_argument('--dropout_rate', type=float, default=0.3,
+                        help='Dropout rate for regularization')
+    parser.add_argument('--weight_decay', type=float, default=1e-3,
+                        help='Weight decay for L2 regularization')
     parser.add_argument('--num_workers', type=int, default=4,
                         help='Number of data loader workers')
     parser.add_argument('--gpu_ids', type=str, default=None,
@@ -176,6 +192,8 @@ def main():
                         help='Directory to save checkpoints')
     parser.add_argument('--log_dir', type=str, default='./logs',
                         help='Directory to save logs')
+    parser.add_argument('--experiment_name', type=str, default=None,
+                        help='Custom experiment name (timestamp will be appended)')
     
     args = parser.parse_args()
     
@@ -199,10 +217,13 @@ def main():
         batch_size=args.batch_size,
         num_epochs=args.num_epochs,
         learning_rate=args.learning_rate,
+        dropout_rate=args.dropout_rate,
+        weight_decay=args.weight_decay,
         num_workers=args.num_workers,
         gpu_ids=gpu_ids,
         checkpoint_dir=args.checkpoint_dir,
-        log_dir=args.log_dir
+        log_dir=args.log_dir,
+        experiment_name=args.experiment_name
     )
 
 if __name__ == "__main__":
