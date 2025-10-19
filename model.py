@@ -71,8 +71,8 @@ class UNetSegmentation(pl.LightningModule):
             # Apply stronger dropout to bottleneck (last encoder feature)
             features[-1] = self.bottleneck_dropout(features[-1])
         
-        # Use the decoder from the U-Net model
-        decoder_output = self.model.decoder(*features)
+        # Use the decoder from the U-Net model - pass features as list, not unpacked
+        decoder_output = self.model.decoder(features)
         
         # Apply dropout to decoder output during training
         if self.training:
