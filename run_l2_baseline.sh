@@ -7,7 +7,7 @@ echo "=== L2 BASELINE EXPERIMENT (NO PRETRAINING) ==="
 echo "Starting at: $(date)"
 
 python train_baseline.py \
-    --data_dir /scratch/s52melba/CerraData_Project_Phenorob/kaggle_temp/cerradata_4mm \
+    --data_dir /home/s52melba/CerraData_Project_Phenorob/kaggle_temp/cerradata_4mm \
     --label_level L2 \
     --experiment_name "l2_baseline_14classes_no_pretrain" \
     --gpu_ids "1" \

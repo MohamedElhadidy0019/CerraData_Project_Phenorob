@@ -109,7 +109,7 @@ class CerraDataset(Dataset):
         if self.label_level == 'L2':
             label_filename = f"parrot_beak_terraclass_classes_14c_{img_id}.tif"
         else:  # L1
-            label_filename = f"parrot_beak_terraclass_classes_7c_{img_id}.tif"
+            label_filename = f"mask_parrot_beak_7classes_{img_id}.tif"
         label_path = self.labels_dir / label_filename
         with rasterio.open(label_path) as src:
             label = src.read(1)  # Shape: (H, W)
