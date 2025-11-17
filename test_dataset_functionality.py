@@ -49,8 +49,7 @@ def test_single_batch(data_loader, split_name):
     
     try:
         batch = next(iter(data_loader))
-        images = batch['image']
-        labels = batch['label']
+        images, labels = batch
         
         print(f"✓ Batch loaded successfully")
         print(f"✓ Image shape: {images.shape}")
@@ -61,7 +60,7 @@ def test_single_batch(data_loader, split_name):
         print(f"✓ Label range: [{labels.min().item()}, {labels.max().item()}]")
         print(f"✓ Unique labels: {sorted(torch.unique(labels).tolist())}")
         
-        return batch
+        return (images, labels)
         
     except Exception as e:
         print(f"✗ Batch loading failed: {e}")
