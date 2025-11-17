@@ -67,9 +67,10 @@ def test_single_batch(data_loader, split_name):
         return None
 
 
-def test_model_creation_and_inference(num_classes):
+def test_model_creation_and_inference(num_classes, device='cpu'):
     """Test model creation and forward pass"""
     print(f"\n=== Testing Model Creation and Inference ===")
+    print(f"Using device: {device}")
     
     try:
         # Create model
@@ -82,8 +83,12 @@ def test_model_creation_and_inference(num_classes):
         print(f"✓ Model created with {num_classes} classes")
         print(f"✓ Model parameters: {sum(p.numel() for p in model.parameters()):,}")
         
+        # Move model to device
+        model = model.to(device)
+        print(f"✓ Model moved to {device}")
+        
         # Test forward pass
-        dummy_input = torch.randn(2, 12, 128, 128)  # Batch of 2
+        dummy_input = torch.randn(2, 12, 128, 128).to(device)  # Batch of 2
         model.eval()
         with torch.no_grad():
             output = model(dummy_input)
@@ -99,13 +104,15 @@ def test_model_creation_and_inference(num_classes):
         return None
 
 
-def test_validation_step(model, val_loader):
+def test_validation_step(model, val_loader, device='cpu'):
     """Test validation step functionality"""
     print(f"\n=== Testing Validation Step ===")
     
     try:
         model.eval()
         batch = next(iter(val_loader))
+        # Move batch to device
+        batch = [b.to(device) for b in batch]
         
         # Test validation step
         with torch.no_grad():
@@ -120,13 +127,15 @@ def test_validation_step(model, val_loader):
         return False
 
 
-def test_model_training_step(model, train_loader):
+def test_model_training_step(model, train_loader, device='cpu'):
     """Test training step functionality"""
     print(f"\n=== Testing Training Step ===")
     
     try:
         model.train()
         batch = next(iter(train_loader))
+        # Move batch to device
+        batch = [b.to(device) for b in batch]
         
         # Test training step
         train_loss = model.training_step(batch, 0)
@@ -140,7 +149,7 @@ def test_model_training_step(model, train_loader):
         return False
 
 
-def test_full_validation_epoch(model, val_loader):
+def test_full_validation_epoch(model, val_loader, device='cpu'):
     """Test running validation on multiple batches"""
     print(f"\n=== Testing Full Validation Epoch ===")
     
@@ -153,6 +162,8 @@ def test_full_validation_epoch(model, val_loader):
             for i, batch in enumerate(val_loader):
                 if i >= num_batches:
                     break
+                # Move batch to device
+                batch = [b.to(device) for b in batch]
                 val_loss = model.validation_step(batch, i)
                 total_loss += val_loss.item()
                 print(f"  Batch {i+1}/{num_batches}: loss = {val_loss:.4f}")
@@ -191,16 +202,18 @@ def test_lightning_trainer(model, val_loader, test_loader):
         
         # Test testing (just a few batches to avoid long runtime)
         print("Testing trainer.test() on a subset...")
+        print("⚠  WARNING: This will test on_test_epoch_end() which had the IndexError!")
         test_subset = torch.utils.data.Subset(test_loader.dataset, range(0, min(20, len(test_loader.dataset))))
         test_subset_loader = DataLoader(test_subset, batch_size=4, shuffle=False)
         
         test_results = trainer.test(model, test_subset_loader, verbose=False)
-        print(f"✓ Trainer testing successful")
+        print(f"✓ Trainer testing successful - IndexError should be fixed!")
         
         return True
         
     except Exception as e:
         print(f"✗ Lightning trainer test failed: {e}")
+        print(f"   This might be the same IndexError from on_test_epoch_end()!")
         return False
 
 
@@ -210,6 +223,7 @@ def main():
     parser.add_argument('--label_level', default='L1', choices=['L1', 'L2'], help='Label level (L1 or L2)')
     parser.add_argument('--batch_size', type=int, default=4, help='Batch size for testing')
     parser.add_argument('--skip_trainer', action='store_true', help='Skip PyTorch Lightning trainer tests')
+    parser.add_argument('--device', default='cpu', help='Device to use (cpu, cuda:0, cuda:1, etc.)')
     
     args = parser.parse_args()
     
@@ -227,6 +241,7 @@ def main():
         return
     
     print(f"\n✓ Using {num_classes} classes for {args.label_level}")
+    print(f"✓ Using device: {args.device}")
     
     # Test individual batches
     train_batch = test_single_batch(train_loader, "Training")
@@ -238,15 +253,15 @@ def main():
         return
     
     # Test model creation and inference
-    model = test_model_creation_and_inference(num_classes)
+    model = test_model_creation_and_inference(num_classes, args.device)
     if model is None:
         print("\n✗ Model creation failed. Stopping tests.")
         return
     
     # Test model steps
-    test_model_training_step(model, train_loader)
-    test_validation_step(model, val_loader)
-    test_full_validation_epoch(model, val_loader)
+    test_model_training_step(model, train_loader, args.device)
+    test_validation_step(model, val_loader, args.device)
+    test_full_validation_epoch(model, val_loader, args.device)
     
     # Test PyTorch Lightning trainer (optional)
     if not args.skip_trainer:
