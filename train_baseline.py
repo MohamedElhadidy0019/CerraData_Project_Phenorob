@@ -99,7 +99,7 @@ def train_baseline(
     
     early_stop_callback = EarlyStopping(
         monitor='val_loss',
-        patience=15,
+        patience=20,
         verbose=True,
         mode='min'
     )
@@ -119,7 +119,7 @@ def train_baseline(
         strategy=strategy,
         callbacks=[checkpoint_callback, early_stop_callback],
         logger=logger,
-        log_every_n_steps=50,
+        log_every_n_steps=9,
         val_check_interval=1.0,
         precision=16 if use_gpu else 32,  # Use mixed precision on GPU
         deterministic=False,  # Disabled due to CUDA cross_entropy determinism issue
