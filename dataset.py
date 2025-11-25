@@ -5,7 +5,7 @@ Dataset classes for CerraData-4MM
 import os
 import numpy as np
 import torch
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader, Subset
 from PIL import Image
 import rasterio
 from pathlib import Path
@@ -137,13 +137,43 @@ class CerraDataset(Dataset):
         
         return image, label
 
-def create_data_loaders(data_dir, batch_size=16, num_workers=4, label_level='L2'):
+def create_data_loaders(data_dir, batch_size=16, num_workers=4, label_level='L2', data_percentage=100):
     """Create train, validation, and test data loaders"""
     
     # Create datasets
     train_dataset = CerraDataset(data_dir, split='train', label_level=label_level)
     val_dataset = CerraDataset(data_dir, split='val', label_level=label_level)
     test_dataset = CerraDataset(data_dir, split='test', label_level=label_level)
+    
+    # Apply data percentage reduction if specified
+    if data_percentage < 100:
+        import random
+        random.seed(42)  # For reproducibility
+        
+        # Calculate subset sizes
+        train_size = int(len(train_dataset) * data_percentage / 100)
+        val_size = int(len(val_dataset) * data_percentage / 100)
+        test_size = int(len(test_dataset) * data_percentage / 100)
+        
+        # Create random indices for each split
+        train_indices = random.sample(range(len(train_dataset)), train_size)
+        val_indices = random.sample(range(len(val_dataset)), val_size)
+        test_indices = random.sample(range(len(test_dataset)), test_size)
+        
+        # Create subset datasets
+        train_dataset = Subset(train_dataset, train_indices)
+        val_dataset = Subset(val_dataset, val_indices)
+        test_dataset = Subset(test_dataset, test_indices)
+        
+        print(f"Using {data_percentage}% of data:")
+        print(f"  Train samples: {len(train_dataset)}")
+        print(f"  Val samples: {len(val_dataset)}")
+        print(f"  Test samples: {len(test_dataset)}")
+    else:
+        print(f"Using full dataset (100%)")
+        print(f"  Train samples: {len(train_dataset)}")
+        print(f"  Val samples: {len(val_dataset)}")
+        print(f"  Test samples: {len(test_dataset)}")
     
     # Create data loaders
     train_loader = DataLoader(

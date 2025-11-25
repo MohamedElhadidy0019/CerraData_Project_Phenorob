@@ -24,7 +24,8 @@ def train_l2_finetune(
     gpu_ids=None,
     checkpoint_dir="./checkpoints",
     log_dir="./logs",
-    experiment_name=None
+    experiment_name=None,
+    data_percentage=100
 ):
     """Fine-tune L2 model using L1 pretrained weights"""
     
@@ -58,7 +59,8 @@ def train_l2_finetune(
         data_dir=data_dir,
         batch_size=batch_size,
         num_workers=num_workers,
-        label_level='L2'
+        label_level='L2',
+        data_percentage=data_percentage
     )
     
     print(f"Train batches: {len(train_loader)}")
@@ -198,6 +200,8 @@ def main():
                         help='Directory to save logs')
     parser.add_argument('--experiment_name', type=str, default=None,
                         help='Custom experiment name (timestamp will be appended)')
+    parser.add_argument('--data_percentage', type=int, default=100,
+                        help='Percentage of data to use (1-100)')
     
     args = parser.parse_args()
     
@@ -232,7 +236,8 @@ def main():
         gpu_ids=gpu_ids,
         checkpoint_dir=args.checkpoint_dir,
         log_dir=args.log_dir,
-        experiment_name=args.experiment_name
+        experiment_name=args.experiment_name,
+        data_percentage=args.data_percentage
     )
 
 if __name__ == "__main__":

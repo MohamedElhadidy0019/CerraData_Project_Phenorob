@@ -19,6 +19,7 @@ python train_l2_finetune.py \
     --num_epochs 100 \
     --learning_rate 1e-4 \
     --checkpoint_dir ./checkpoints \
-    --log_dir ./logs
+    --log_dir ./logs \
+    --data_percentage 10
 
 echo "Completed at: $(date)"

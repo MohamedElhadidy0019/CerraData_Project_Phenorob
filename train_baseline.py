@@ -23,7 +23,8 @@ def train_baseline(
     checkpoint_dir="./checkpoints",
     log_dir="./logs",
     label_level="L2",
-    experiment_name=None
+    experiment_name=None,
+    data_percentage=100
 ):
     """Train baseline model with random initialization on L1 (7-class) or L2 (14-class) segmentation"""
     
@@ -56,7 +57,8 @@ def train_baseline(
         data_dir=data_dir,
         batch_size=batch_size,
         num_workers=num_workers,
-        label_level=label_level
+        label_level=label_level,
+        data_percentage=data_percentage
     )
     
     print(f"Train batches: {len(train_loader)}")
@@ -186,6 +188,8 @@ def main():
                         help='Label level: L1 (7 classes) or L2 (14 classes)')
     parser.add_argument('--experiment_name', type=str, default=None,
                         help='Custom experiment name (timestamp will be appended)')
+    parser.add_argument('--data_percentage', type=int, default=100,
+                        help='Percentage of data to use (1-100)')
     
     args = parser.parse_args()
     
@@ -214,7 +218,8 @@ def main():
         checkpoint_dir=args.checkpoint_dir,
         log_dir=args.log_dir,
         label_level=args.label_level,
-        experiment_name=args.experiment_name
+        experiment_name=args.experiment_name,
+        data_percentage=args.data_percentage
     )
 
 if __name__ == "__main__":
