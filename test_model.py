@@ -3,11 +3,9 @@
 Test trained model on the full test set with same data splits as training
 """
 import os
-import torch
 import pytorch_lightning as pl
 import argparse
 import numpy as np
-from sklearn.metrics import f1_score, jaccard_score, accuracy_score
 
 from dataset import CerraDataset
 from torch.utils.data import DataLoader
@@ -43,22 +41,17 @@ def test_model(
     print(f"Accelerator: {accelerator}")
     print(f"Devices: {devices}")
     
-    # Create test dataset with SAME splitting logic as training
-    print("\nCreating test dataset...")
+    # Create test dataset from physical splits
+    print("\nCreating test dataset from physical splits...")
     test_dataset = CerraDataset(
         data_dir=data_dir, 
         split='test', 
-        label_level=label_level,
-        # Using same default parameters as training to ensure identical splits
-        train_ratio=0.7, 
-        val_ratio=0.15, 
-        test_ratio=0.15, 
-        random_state=42
+        label_level=label_level
     )
     
     print(f"Test samples: {len(test_dataset)}")
     
-    # Create test data loader (full test set, no percentage sampling)
+    # Create test data loader (always full test set)
     test_loader = DataLoader(
         test_dataset, 
         batch_size=batch_size, 
@@ -72,58 +65,42 @@ def test_model(
     # Load trained model
     print(f"\nLoading model from: {checkpoint_path}")
     model = UNetSegmentation.load_from_checkpoint(checkpoint_path)
-    model.eval()
     
-    # Create trainer for testing
+    # Create trainer for testing (same as training)
     trainer = pl.Trainer(
         accelerator=accelerator,
         devices=devices,
         logger=False,
-        enable_checkpointing=False
+        enable_checkpointing=False,
+        precision=16 if use_gpu else 32
     )
     
-    print("\nRunning inference on test set...")
+    print("\nRunning Lightning test method (same as training)...")
     
-    # Collect all predictions and labels
-    all_preds = []
-    all_labels = []
+    # Use Lightning's test method for consistency with training
+    test_results = trainer.test(model, test_loader, verbose=False)
     
-    with torch.no_grad():
-        for batch in test_loader:
-            images, labels = batch
-            if use_gpu:
-                images = images.cuda()
-                labels = labels.cuda()
-            
-            # Forward pass
-            logits = model(images)
-            preds = torch.argmax(logits, dim=1)
-            
-            # Store predictions and labels
-            all_preds.append(preds.cpu().numpy())
-            all_labels.append(labels.cpu().numpy())
+    # Extract metrics from Lightning results
+    test_metrics = test_results[0]
     
-    # Concatenate all predictions and labels
-    all_preds = np.concatenate(all_preds, axis=0)
-    all_labels = np.concatenate(all_labels, axis=0)
+    accuracy = test_metrics.get('test_acc', 0.0)
+    f1_macro = test_metrics.get('test_f1_macro', 0.0)
+    f1_weighted = test_metrics.get('test_f1_weighted', 0.0)
+    iou_macro = test_metrics.get('test_iou_macro', 0.0)
     
-    # Flatten for metrics calculation
-    all_preds_flat = all_preds.flatten()
-    all_labels_flat = all_labels.flatten()
+    # Get per-class metrics from the logged values
+    f1_per_class = []
+    iou_per_class = []
     
-    print(f"Total test pixels: {len(all_preds_flat):,}")
-    print(f"Unique labels in test: {sorted(np.unique(all_labels_flat))}")
-    print(f"Unique predictions: {sorted(np.unique(all_preds_flat))}")
+    num_classes = 14 if label_level == 'L2' else 7
+    for i in range(num_classes):
+        f1_class = test_metrics.get(f'test_f1_class_{i}', 0.0)
+        iou_class = test_metrics.get(f'test_iou_class_{i}', 0.0)
+        f1_per_class.append(f1_class)
+        iou_per_class.append(iou_class)
     
-    # Calculate metrics
-    accuracy = accuracy_score(all_labels_flat, all_preds_flat)
-    f1_macro = f1_score(all_labels_flat, all_preds_flat, average='macro', zero_division=0)
-    f1_weighted = f1_score(all_labels_flat, all_preds_flat, average='weighted', zero_division=0)
-    iou_macro = jaccard_score(all_labels_flat, all_preds_flat, average='macro', zero_division=0)
-    
-    # Per-class metrics
-    f1_per_class = f1_score(all_labels_flat, all_preds_flat, average=None, zero_division=0)
-    iou_per_class = jaccard_score(all_labels_flat, all_preds_flat, average=None, zero_division=0)
+    f1_per_class = np.array(f1_per_class)
+    iou_per_class = np.array(iou_per_class)
     
     print("\n" + "="*50)
     print("TEST SET RESULTS")
@@ -151,7 +128,7 @@ def test_model(
         f.write(f"Model: {checkpoint_path}\n")
         f.write(f"Label Level: {label_level}\n")
         f.write(f"Test Samples: {len(test_dataset)}\n")
-        f.write(f"Total Test Pixels: {len(all_preds_flat):,}\n\n")
+        f.write(f"Total Test Samples: {len(test_dataset)}\n\n")
         f.write("Overall Metrics:\n")
         f.write(f"Accuracy: {accuracy:.4f}\n")
         f.write(f"F1 Macro: {f1_macro:.4f}\n")
@@ -208,7 +185,7 @@ def main():
         gpu_ids = [int(x) for x in args.gpu_ids.split(',')]
     
     # Test model
-    results = test_model(
+    test_model(
         checkpoint_path=args.checkpoint,
         data_dir=args.data_dir,
         label_level=args.label_level,

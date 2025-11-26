@@ -1,70 +1,52 @@
 #!/usr/bin/env python3
 """
-Dataset classes for CerraData-4MM
+Dataset classes for CerraData-4MM with physical splits
 """
 import os
 import numpy as np
 import torch
 from torch.utils.data import Dataset, DataLoader, Subset
-from PIL import Image
 import rasterio
 from pathlib import Path
-from sklearn.model_selection import train_test_split
-import json
+import random
 
 class CerraDataset(Dataset):
-    """Dataset class for CerraData-4MM"""
+    """Dataset class for physically split CerraData-4MM"""
     
-    def __init__(self, data_dir, split='train', label_level='L2', transform=None, 
-                 train_ratio=0.7, val_ratio=0.15, test_ratio=0.15, random_state=42):
+    def __init__(self, data_dir, split='train', label_level='L2', transform=None):
         """
         Args:
-            data_dir: Path to dataset directory
+            data_dir: Path to physically split dataset directory 
             split: 'train', 'val', or 'test'
             label_level: 'L1' (7 classes) or 'L2' (14 classes)
             transform: Optional transforms
-            train_ratio: Training split ratio (default 0.7)
-            val_ratio: Validation split ratio (default 0.15)
-            test_ratio: Test split ratio (default 0.15)
-            random_state: Random seed for reproducible splits
         """
         self.data_dir = Path(data_dir)
         self.split = split
         self.label_level = label_level
         self.transform = transform
         
-        # Find all image files
-        self.images_dir = self.data_dir / "msi_images"
-        # Set labels directory based on label level
+        # Set paths for physically split dataset
+        self.split_dir = self.data_dir / split
+        self.images_dir = self.split_dir / "images"
+        
         if label_level == 'L2':
-            self.labels_dir = self.data_dir / "semantic_14c"
+            self.labels_dir = self.split_dir / "labels_l2"
         else:  # L1
-            self.labels_dir = self.data_dir / "semantic_7c"
+            self.labels_dir = self.split_dir / "labels_l1"
+        
+        # Check directories exist
+        if not self.images_dir.exists():
+            raise ValueError(f"Images directory not found: {self.images_dir}")
+        if not self.labels_dir.exists():
+            raise ValueError(f"Labels directory not found: {self.labels_dir}")
         
         # Get all image files
-        image_files = list(self.images_dir.glob("*.tif"))
-        image_files.sort()  # Ensure consistent ordering
+        self.image_files = list(self.images_dir.glob("*.tif"))
+        self.image_files.sort()  # Ensure consistent ordering
         
-        # Create train/val/test splits
-        train_files, temp_files = train_test_split(
-            image_files, test_size=(val_ratio + test_ratio), 
-            random_state=random_state
-        )
-        
-        val_files, test_files = train_test_split(
-            temp_files, test_size=test_ratio/(val_ratio + test_ratio),
-            random_state=random_state
-        )
-        
-        # Select files based on split
-        if split == 'train':
-            self.image_files = train_files
-        elif split == 'val':
-            self.image_files = val_files
-        elif split == 'test':
-            self.image_files = test_files
-        else:
-            raise ValueError(f"Invalid split: {split}")
+        if len(self.image_files) == 0:
+            raise ValueError(f"No image files found in {self.images_dir}")
         
         print(f"{split.upper()} split: {len(self.image_files)} samples")
         
@@ -103,14 +85,19 @@ class CerraDataset(Dataset):
             image = src.read()  # Shape: (12, H, W)
             image = image.astype(np.float32)
         
-        # Load label
-        # Extract the numeric ID from the image filename (e.g., "parrot_beak_ms_42312" -> "42312")
+        # Load corresponding label
         img_id = img_path.stem.split('_')[-1]
+        
         if self.label_level == 'L2':
             label_filename = f"parrot_beak_terraclass_classes_14c_{img_id}.tif"
         else:  # L1
             label_filename = f"mask_parrot_beak_7classes_{img_id}.tif"
+            
         label_path = self.labels_dir / label_filename
+        
+        if not label_path.exists():
+            raise FileNotFoundError(f"Label file not found: {label_path}")
+            
         with rasterio.open(label_path) as src:
             label = src.read(1)  # Shape: (H, W)
             label = label.astype(np.int64)
@@ -138,37 +125,36 @@ class CerraDataset(Dataset):
         return image, label
 
 def create_data_loaders(data_dir, batch_size=16, num_workers=4, label_level='L2', data_percentage=100):
-    """Create train, validation, and test data loaders"""
+    """Create train, validation, and test data loaders from physically split dataset"""
     
-    # Create datasets
+    # Create datasets from physical splits
     train_dataset = CerraDataset(data_dir, split='train', label_level=label_level)
     val_dataset = CerraDataset(data_dir, split='val', label_level=label_level)
     test_dataset = CerraDataset(data_dir, split='test', label_level=label_level)
     
     # Apply data percentage reduction if specified
+    # For training: use percentage of train and val, but ALWAYS use full test set
     if data_percentage < 100:
-        import random
         random.seed(42)  # For reproducibility
         
-        # Calculate subset sizes
+        # Calculate subset sizes (only for train and val)
         train_size = int(len(train_dataset) * data_percentage / 100)
         val_size = int(len(val_dataset) * data_percentage / 100)
-        test_size = int(len(test_dataset) * data_percentage / 100)
+        # test_size = len(test_dataset)  # Always use full test set
         
-        # Create random indices for each split
+        # Create random indices for train and val only
         train_indices = random.sample(range(len(train_dataset)), train_size)
         val_indices = random.sample(range(len(val_dataset)), val_size)
-        test_indices = random.sample(range(len(test_dataset)), test_size)
         
         # Create subset datasets
         train_dataset = Subset(train_dataset, train_indices)
         val_dataset = Subset(val_dataset, val_indices)
-        test_dataset = Subset(test_dataset, test_indices)
+        # test_dataset remains unchanged (full test set)
         
-        print(f"Using {data_percentage}% of data:")
-        print(f"  Train samples: {len(train_dataset)}")
-        print(f"  Val samples: {len(val_dataset)}")
-        print(f"  Test samples: {len(test_dataset)}")
+        print(f"Using {data_percentage}% of train/val data:")
+        print(f"  Train samples: {len(train_dataset)} ({data_percentage}% of original)")
+        print(f"  Val samples: {len(val_dataset)} ({data_percentage}% of original)")
+        print(f"  Test samples: {len(test_dataset)} (100% - full test set)")
     else:
         print(f"Using full dataset (100%)")
         print(f"  Train samples: {len(train_dataset)}")
@@ -195,7 +181,7 @@ def create_data_loaders(data_dir, batch_size=16, num_workers=4, label_level='L2'
 
 if __name__ == "__main__":
     # Test dataset loading
-    data_dir = "./data"
+    data_dir = "./data_split"
     if os.path.exists(data_dir):
         train_loader, val_loader, test_loader = create_data_loaders(data_dir, batch_size=2)
         
@@ -209,4 +195,4 @@ if __name__ == "__main__":
             if batch_idx >= 2:  # Only test a few batches
                 break
     else:
-        print("Data directory not found. Run download_data.py first.")
+        print("Split dataset directory not found. Run create_physical_splits.py first.")

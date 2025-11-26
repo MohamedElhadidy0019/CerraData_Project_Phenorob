@@ -12,7 +12,7 @@ echo "Using L1 checkpoint: $L1_CHECKPOINT"
 
 python train_l2_finetune.py \
     --l1_checkpoint "$L1_CHECKPOINT" \
-    --data_dir /home/s52melba/CerraData_Project_Phenorob/kaggle_temp/cerradata_4mm \
+    --data_dir ./data_split \
     --experiment_name "l2_finetune_14classes_from_l1" \
     --gpu_ids "1" \
     --batch_size 256 \

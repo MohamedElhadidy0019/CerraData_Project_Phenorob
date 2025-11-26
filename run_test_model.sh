@@ -14,7 +14,7 @@ echo "Starting at: $(date)"
 
 python test_model.py \
     --checkpoint "$CHECKPOINT_PATH" \
-    --data_dir /home/s52melba/CerraData_Project_Phenorob/kaggle_temp/cerradata_4mm \
+    --data_dir ./data_split \
     --label_level "$LABEL_LEVEL" \
     --gpu_ids "0" \
     --batch_size 32 \
