@@ -2,10 +2,14 @@
 kaggle_temp/
 # whats in checkpoints
 checkpoints/
+cerradata_splitted/
 logs/
 *.pyc
 __pycache__/
 
 __pycache__/dataset.cpython-39.pyc
 *.png
+*.ckpt
+*.yaml
+events.*
 
