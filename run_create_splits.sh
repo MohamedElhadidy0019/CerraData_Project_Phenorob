@@ -7,7 +7,7 @@
 SOURCE_DIR="/home/s52melba/CerraData_Project_Phenorob/kaggle_temp/cerradata_4mm"
 
 # TARGET_DIR: Path where physically split dataset will be created
-TARGET_DIR="./data_split"
+TARGET_DIR="cerradata_splitted"
 
 echo "=== CREATING PHYSICAL DATASET SPLITS ==="
 echo "Starting at: $(date)"

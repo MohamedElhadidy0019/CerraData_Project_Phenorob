@@ -1,0 +1,41 @@
+Baseline Model Training Summary
+================================
+
+Experiment: l1_pretrain_7classes_splitted_20251126_144207
+Model: U-Net with ResNet34 encoder (random initialization)
+Task: 7-class semantic segmentation (L1 labels)
+Dataset: CerraData-4MM
+Training samples: 21203
+Validation samples: 4544
+Test samples: 4544
+Batch size: 512
+Learning rate: 0.001
+Total epochs: 58
+Best checkpoint: /home/s52melba/CerraData_Project_Phenorob/checkpoints_data_splitted/l1_pretrain_7classes_splitted_20251126_144207/epoch=34-val_loss=0.3324-val_f1_macro=0.6935.ckpt
+Final validation loss: N/A
+Final validation F1: N/A
+Final validation IoU: N/A
+
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+───────────────────────────────
+       Test metric             DataLoader 0                                                        
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+───────────────────────────────
+        test_acc            0.8654868602752686                                                     
+     test_f1_class_0        0.8054890632629395                                                     
+     test_f1_class_1        0.8963606357574463                                                     
+     test_f1_class_2        0.8440951704978943                                                     
+     test_f1_class_3         0.936916708946228                                                     
+     test_f1_class_4                0.0                                                            
+      test_f1_macro         0.6965723037719727                                                     
+    test_f1_weighted        0.8641363382339478                                                     
+    test_iou_class_0        0.6743254065513611                                                     
+    test_iou_class_1        0.8121861219406128                                                     
+    test_iou_class_2        0.7302462458610535                                                     
+    test_iou_class_3        0.8813201189041138                                                     
+    test_iou_class_4                0.0                                                            
+     test_iou_macro         0.6196155548095703                                                     
+        test_loss           0.3467172384262085                                                     
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+───────────────────────────────

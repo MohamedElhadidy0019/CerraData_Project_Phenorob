@@ -1,0 +1,55 @@
+L2 Fine-tuning Model Training Summary
+====================================
+
+Experiment: l2_finetune_14classes_from_l1_datasplitted_5percent_20251127_174935
+Model: U-Net with ResNet34 encoder (L1 pretrained → L2 fine-tuned)
+Task: 14-class semantic segmentation (L2 labels)
+Pretraining: L1 checkpoint from /home/s52melba/CerraData_Project_Phenorob/checkpoints_data_splitted/l1_pretrain_7classes_splitted_20251126_144207/last.ckpt
+Dataset: CerraData-4MM
+Training samples: 1060
+Validation samples: 227
+Test samples: 4544
+Batch size: 100
+Learning rate: 0.0001
+Total epochs: 69
+Best checkpoint: /home/s52melba/CerraData_Project_Phenorob/checkpoints_data_splitted/l2_finetune_14classes_from_l1_datasplitted_5percent_20251127_174935/epoch=54-val_loss=0.8341-val_f1_macro=0.3439.ckpt
+Final validation loss: N/A
+Final validation F1: N/A
+Final validation IoU: N/A
+
+
+──                                                                                                                                                                                            
+        test_acc            0.7757629752159119                                                                                                                                                
+     test_f1_class_0         0.787200927734375                                                                                                                                                
+     test_f1_class_1        0.8294702172279358                                                                                                                                                
+    test_f1_class_10                0.0                                                                                                                                                       
+    test_f1_class_11        0.5645571351051331                                                                                                                                                
+    test_f1_class_12                0.0                                                                                                                                                       
+    test_f1_class_13        0.05078279227018356                                                                                                                                               
+     test_f1_class_2        0.35033783316612244                                                                                                                                               
+     test_f1_class_3        0.8607708811759949                                                                                                                                                
+     test_f1_class_4                0.0                                                                                                                                                       
+     test_f1_class_5                0.0                                                                                                                                                       
+     test_f1_class_6       3.154126534354873e-05                                                                                                                                              
+     test_f1_class_7        0.7391132712364197                                                                                                                                                
+     test_f1_class_8                0.0                                                                                                                                                       
+     test_f1_class_9       0.0010707571636885405                                                                                                                                              
+      test_f1_macro          0.298809677362442                                                                                                                                                
+    test_f1_weighted        0.7616173624992371                                                                                                                                                
+    test_iou_class_0        0.6490777730941772                                                                                                                                                
+    test_iou_class_1        0.7086279988288879                                                                                                                                                
+    test_iou_class_10               0.0                                                                                                                                                       
+    test_iou_class_11       0.3932982087135315                                                                                                                                                
+    test_iou_class_12               0.0                                                                                                                                                       
+    test_iou_class_13      0.026052916422486305                                                                                                                                               
+    test_iou_class_2        0.21236944198608398                                                
+    test_iou_class_3        0.7555730938911438                                                 
+    test_iou_class_4                0.0                                                        
+    test_iou_class_5                0.0                                                        
+    test_iou_class_6      1.5770880054333247e-05                                                                                                                                              
+    test_iou_class_7        0.5861853361129761                                                 
+    test_iou_class_8                0.0                                                        
+    test_iou_class_9       0.0005356653709895909                                                                                                                                              
+     test_iou_macro         0.2379811555147171                                                 
+        test_loss           0.8263258934020996                                                 
+─────────────────────────────────────────────────────
