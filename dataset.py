@@ -13,55 +13,57 @@ import random
 class CerraDataset(Dataset):
     """Dataset class for physically split CerraData-4MM"""
     
-    def __init__(self, data_dir, split='train', label_level='L2', transform=None):
+    def __init__(self, data_dir, split='train', label_level='L2', transform=None, global_stats=None):
         """
         Args:
-            data_dir: Path to physically split dataset directory 
+            data_dir: Path to physically split dataset directory
             split: 'train', 'val', or 'test'
             label_level: 'L1' (7 classes) or 'L2' (14 classes)
             transform: Optional transforms
+            global_stats: Optional tuple of (global_min, global_max) for normalization.
+                         If None, will compute from current split.
         """
         self.data_dir = Path(data_dir)
         self.split = split
         self.label_level = label_level
         self.transform = transform
-        
+
         # Set paths for physically split dataset
         self.split_dir = self.data_dir / split
         self.images_dir = self.split_dir / "images"
-        
+
         if label_level == 'L2':
             self.labels_dir = self.split_dir / "labels_l2"
         else:  # L1
             self.labels_dir = self.split_dir / "labels_l1"
-        
+
         # Check directories exist
         if not self.images_dir.exists():
             raise ValueError(f"Images directory not found: {self.images_dir}")
         if not self.labels_dir.exists():
             raise ValueError(f"Labels directory not found: {self.labels_dir}")
-        
+
         # Get all image files
         self.image_files = list(self.images_dir.glob("*.tif"))
         self.image_files.sort()  # Ensure consistent ordering
-        
+
         if len(self.image_files) == 0:
             raise ValueError(f"No image files found in {self.images_dir}")
-        
+
         print(f"{split.upper()} split: {len(self.image_files)} samples")
-        
+
         # L2 class mapping (14 classes)
         self.l2_classes = {
             'Pa': 0, 'V1': 1, 'V2': 2, 'Wt': 3, 'Mg': 4, 'UA': 5, 'OB': 6,
             'Ft': 7, 'PR': 8, 'SP': 9, 'T1': 10, 'T1+': 11, 'OU': 12, 'Df': 13
         }
-        
-        # L1 class mapping (7 classes) 
+
+        # L1 class mapping (7 classes)
         self.l1_classes = {
             'Pasture': 0, 'Forest': 1, 'Agriculture': 2, 'Mining': 3,
             'Building': 4, 'Water body': 5, 'Other Uses': 6
         }
-        
+
         # L2 to L1 mapping
         self.l2_to_l1 = {
             0: 0,  # Pa -> Pasture
@@ -72,8 +74,43 @@ class CerraDataset(Dataset):
             3: 5,  # Wt -> Water body
             12: 6, 13: 6  # OU, Df -> Other Uses
         }
-        
+
         self.num_classes = 14 if label_level == 'L2' else 7
+
+        # Set or compute global statistics for normalization
+        if global_stats is not None:
+            self.global_min, self.global_max = global_stats
+            print(f"Using provided global statistics")
+        else:
+            print(f"Computing global per-channel statistics from {split} split...")
+            self.global_min, self.global_max = self._compute_global_stats()
+            print(f"Global min per channel: {self.global_min}")
+            print(f"Global max per channel: {self.global_max}")
+
+    def _compute_global_stats(self):
+        """Compute global min/max per channel across all images in this split"""
+        num_channels = 12
+        channel_mins = [float('inf')] * num_channels
+        channel_maxs = [float('-inf')] * num_channels
+
+        print(f"Scanning {len(self.image_files)} images for statistics...")
+        for idx, img_path in enumerate(self.image_files):
+            if idx % 100 == 0:
+                print(f"  Processed {idx}/{len(self.image_files)} images...")
+
+            with rasterio.open(img_path) as src:
+                image = src.read()  # Shape: (12, H, W)
+                image = image.astype(np.float32)
+
+            # Update min/max for each channel
+            for ch in range(num_channels):
+                ch_min = image[ch].min()
+                ch_max = image[ch].max()
+                channel_mins[ch] = min(channel_mins[ch], ch_min)
+                channel_maxs[ch] = max(channel_maxs[ch], ch_max)
+
+        print(f"  Processed {len(self.image_files)}/{len(self.image_files)} images. Done!")
+        return channel_mins, channel_maxs
         
     def __len__(self):
         return len(self.image_files)
@@ -108,29 +145,45 @@ class CerraDataset(Dataset):
             for l2_class, l1_class in self.l2_to_l1.items():
                 label_l1[label == l2_class] = l1_class
             label = label_l1
-        
+
+        # Per-channel normalization using global statistics
+        normalized_image = np.zeros_like(image)
+        for ch in range(12):
+            ch_min = self.global_min[ch]
+            ch_max = self.global_max[ch]
+            normalized_image[ch] = (image[ch] - ch_min) / (ch_max - ch_min + 1e-8)
+
         # Convert to torch tensors
-        image = torch.from_numpy(image)
+        image = torch.from_numpy(normalized_image)
         label = torch.from_numpy(label)
-        
-        # Normalize image (simple min-max normalization)
-        image = (image - image.min()) / (image.max() - image.min() + 1e-8)
-        
+
         if self.transform:
             # Apply transforms (need to handle both image and label)
             sample = {'image': image, 'label': label}
             sample = self.transform(sample)
             image, label = sample['image'], sample['label']
-        
+
         return image, label
 
 def create_data_loaders(data_dir, batch_size=16, num_workers=4, label_level='L2', data_percentage=100):
-    """Create train, validation, and test data loaders from physically split dataset"""
-    
-    # Create datasets from physical splits
+    """Create train, validation, and test data loaders from physically split dataset
+
+    Global statistics are computed from the training set and shared across all splits
+    to ensure consistent normalization.
+    """
+
+    # Create training dataset first (computes global statistics)
+    print("\n=== Creating Training Dataset ===")
     train_dataset = CerraDataset(data_dir, split='train', label_level=label_level)
-    val_dataset = CerraDataset(data_dir, split='val', label_level=label_level)
-    test_dataset = CerraDataset(data_dir, split='test', label_level=label_level)
+
+    # Extract global statistics from training set
+    global_stats = (train_dataset.global_min, train_dataset.global_max)
+
+    # Create val and test datasets using the same statistics
+    print("\n=== Creating Validation Dataset ===")
+    val_dataset = CerraDataset(data_dir, split='val', label_level=label_level, global_stats=global_stats)
+    print("\n=== Creating Test Dataset ===")
+    test_dataset = CerraDataset(data_dir, split='test', label_level=label_level, global_stats=global_stats)
     
     # Apply data percentage reduction if specified
     # For training: use percentage of train and val, but ALWAYS use full test set
