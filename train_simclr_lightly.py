@@ -21,6 +21,25 @@ from lightly.models.modules import SimCLRProjectionHead
 from lightly.loss import NTXentLoss
 from lightly.transforms import SimCLRTransform
 
+import kornia.augmentation as K
+
+
+
+class MultispectralSimCLRTransform:
+    def __init__(self):
+        self.aug = K.AugmentationSequential(
+            K.RandomResizedCrop(size=(128, 128), scale=(0.5, 1.0), ratio=(0.75, 1.33), p=1.0),
+            K.RandomHorizontalFlip(p=0.5),
+            K.RandomVerticalFlip(p=0.5),
+            K.RandomRotation(degrees=90, p=0.2),
+            K.RandomGaussianBlur(kernel_size=(23, 23), sigma=(0.1, 2.0), p=0.5),
+            data_keys=["input"], same_on_batch=False
+        )
+    
+    def __call__(self, img):
+        img = img.unsqueeze(0)
+        return (self.aug(img).squeeze(0), self.aug(img).squeeze(0))
+
 
 class UnlabeledMSIDataset(Dataset):
     """Dataset for loading unlabeled MSI images (train split only)"""
@@ -47,36 +66,28 @@ class UnlabeledMSIDataset(Dataset):
 
         print(f"Loaded {len(self.image_files)} unlabeled training images")
 
-        # Compute global statistics across entire training set
-        print("Computing global per-channel statistics...")
-        self.global_min, self.global_max = self._compute_global_stats()
-        print(f"Global min per channel: {self.global_min}")
-        print(f"Global max per channel: {self.global_max}")
+    
+    def _data_info(self):
+        # source: https://github.com/ai4luc/CerraData-4MM/blob/main/CerraData-4MM%20Experiments/util/dataset_loader.py
+        
+        min = [99.78856658935547, 332.65665627643466, 347.161809168756, 331.4168453961611,
+                196.89053159952164, 240.9765984416008, 261.34731489419937, 342.50664601475,
+                277.87501442432404, 246.40860325098038, 265.9057685136795, 226.23770987987518]
+        
+        max = [7349.042938232482, 8987.99301147458, 8906.377044677738, 9027.435272216775,
+                9090.25390625, 8949.610290527282, 8955.640045166012, 9491.945373535062,
+                9026.07144165042, 11857.606872558594, 11817.384948730469, 13970.691894531188]
+        
+        mean = [1331.2999603920011, 1422.618248839035, 1648.7418838236356, 1811.0396095371318,
+                2243.6360604171587, 2862.469356914663, 3158.7246770243464, 3253.5804747400075,
+                3464.1887187200564, 3463.5260019211623, 3635.662557047575, 2740.6395025025904]
+        
+        stddev = [436.04697715189127, 484.32797096427566, 549.125419913045, 741.2668466992163,
+                788.8006282648606, 860.9668486457188, 963.2983618801512, 1000.2677835011111,
+                1087.111000434025, 1062.9960118331512, 1373.6088616321088, 1125.5168224477407]
 
-    def _compute_global_stats(self):
-        """Compute global min/max per channel across all training images"""
-        num_channels = 12
-        channel_mins = [float('inf')] * num_channels
-        channel_maxs = [float('-inf')] * num_channels
+        return max, min, mean, stddev
 
-        print(f"Scanning {len(self.image_files)} images for statistics...")
-        for idx, img_path in enumerate(self.image_files):
-            if idx % 100 == 0:
-                print(f"  Processed {idx}/{len(self.image_files)} images...")
-
-            with rasterio.open(img_path) as src:
-                image = src.read()  # Shape: (12, H, W)
-                image = image.astype(np.float32)
-
-            # Update min/max for each channel
-            for ch in range(num_channels):
-                ch_min = image[ch].min()
-                ch_max = image[ch].max()
-                channel_mins[ch] = min(channel_mins[ch], ch_min)
-                channel_maxs[ch] = max(channel_maxs[ch], ch_max)
-
-        print(f"  Processed {len(self.image_files)}/{len(self.image_files)} images. Done!")
-        return channel_mins, channel_maxs
 
     def __len__(self):
         return len(self.image_files)
@@ -90,9 +101,10 @@ class UnlabeledMSIDataset(Dataset):
 
         # Per-channel normalization using global statistics
         normalized_image = np.zeros_like(image)
+        max_val, min_val, mean, stddev= self._data_info()
         for ch in range(12):
-            ch_min = self.global_min[ch]
-            ch_max = self.global_max[ch]
+            ch_min = min_val[ch]
+            ch_max = max_val[ch]
             normalized_image[ch] = (image[ch] - ch_min) / (ch_max - ch_min + 1e-8)
 
         # Convert to torch tensor
@@ -100,9 +112,9 @@ class UnlabeledMSIDataset(Dataset):
 
         # Apply SimCLR transforms if provided
         if self.transform:
-            image = self.transform(image)
+            image_tuple = self.transform(image)
 
-        return image
+        return image_tuple
 
 
 class SimCLRModel(pl.LightningModule):
@@ -173,7 +185,12 @@ class SimCLRModel(pl.LightningModule):
         """Training step with SimCLR contrastive loss"""
         # batch contains two views: (view0, view1)
         # Each view has shape: (B, C, H, W)
-        (x0, x1) = batch[0]
+
+        # Unpack the two augmented views from batch
+        # batch is a list: [view0_batch, view1_batch]
+        # Each view has shape: (B, C, H, W) = (batch_size, 12, 128, 128)
+        # batch is usally (image,label) but here it is (image,image_augmented) because of contrastive learning
+        (x0, x1) = batch
 
         # Get representations for both views
         z0 = self(x0)
@@ -255,19 +272,7 @@ def train_simclr(
     print(f"Devices: {devices}")
     print(f"Strategy: {strategy}")
 
-    # Create SimCLR transforms
-    # Note: lightly's SimCLRTransform expects input_size as int
-    # Disabled color jitter and grayscale as they are RGB-specific and not appropriate for 12-channel multispectral data
-    transform = SimCLRTransform(
-        input_size=128,  # Your image size
-        cj_prob=0.0,     # Color jitter disabled (not for multispectral)
-        cj_strength=0.5, # (ignored when cj_prob=0)
-        min_scale=0.5,   # Minimum crop scale
-        gaussian_blur=0.5,  # Gaussian blur probability
-        random_gray_scale=0.0,  # Grayscale disabled (not for multispectral)
-        hf_prob=0.5,     # Horizontal flip
-        vf_prob=0.5,     # Vertical flip (good for satellite imagery)
-    )
+    transform = MultispectralSimCLRTransform()
 
     # Create dataset (unlabeled, train split only)
     print("\nCreating unlabeled dataset (train split only)...")
@@ -281,9 +286,11 @@ def train_simclr(
         train_dataset,
         batch_size=batch_size,
         shuffle=True,
-        num_workers=num_workers,
         pin_memory=True,
-        drop_last=True  # Important for contrastive learning
+        drop_last=True,  # Important for contrastive learning
+        num_workers=32,
+        prefetch_factor=4,
+        persistent_workers=True, 
     )
 
     print(f"Train batches: {len(train_loader)}")
