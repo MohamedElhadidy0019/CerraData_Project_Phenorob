@@ -9,10 +9,11 @@ python train_simclr_lightly.py \
     --gpu_ids "0" \
     --batch_size 512 \
     --num_epochs 1000 \
-    --learning_rate 1e-3 \
-    --temperature 0.5 \
+    --learning_rate 2e-3 \
+    --temperature 0.3 \
     --projection_dim 128 \
-    --num_workers 16 \
+    --num_workers 32 \
+    --prefetch_factor 2 \
     --checkpoint_dir ./checkpoints_data_splitted \
     --log_dir ./logs_splitted
 

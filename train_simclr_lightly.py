@@ -19,7 +19,6 @@ from torch.utils.data import Dataset, DataLoader
 import segmentation_models_pytorch as smp
 from lightly.models.modules import SimCLRProjectionHead
 from lightly.loss import NTXentLoss
-from lightly.transforms import SimCLRTransform
 
 import kornia.augmentation as K
 
@@ -28,11 +27,11 @@ import kornia.augmentation as K
 class MultispectralSimCLRTransform:
     def __init__(self):
         self.aug = K.AugmentationSequential(
-            K.RandomResizedCrop(size=(128, 128), scale=(0.5, 1.0), ratio=(0.75, 1.33), p=1.0),
+            K.RandomResizedCrop(size=(128, 128), scale=(0.5, 1.0), ratio=(0.75, 1.33), p=0.9),
             K.RandomHorizontalFlip(p=0.5),
             K.RandomVerticalFlip(p=0.5),
-            K.RandomRotation(degrees=90, p=0.2),
-            K.RandomGaussianBlur(kernel_size=(23, 23), sigma=(0.1, 2.0), p=0.5),
+            K.RandomRotation(degrees=90, p=0.5),
+            K.RandomGaussianBlur(kernel_size=(7, 7), sigma=(0.1, 2.0), p=0.5),
             data_keys=["input"], same_on_batch=False
         )
     
@@ -63,6 +62,11 @@ class UnlabeledMSIDataset(Dataset):
 
         if len(self.image_files) == 0:
             raise ValueError(f"No image files found in {self.images_dir}")
+
+        # Precompute normalization statistics (computed once, used for all samples)
+        _, _, mean, stddev = self._data_info()
+        self.mean = np.array(mean).reshape(12, 1, 1).astype(np.float32)
+        self.stddev = np.array(stddev).reshape(12, 1, 1).astype(np.float32)
 
         print(f"Loaded {len(self.image_files)} unlabeled training images")
 
@@ -99,16 +103,11 @@ class UnlabeledMSIDataset(Dataset):
             image = src.read()  # Shape: (12, H, W)
             image = image.astype(np.float32)
 
-        # Per-channel normalization using global statistics
-        normalized_image = np.zeros_like(image)
-        max_val, min_val, mean, stddev= self._data_info()
-        for ch in range(12):
-            ch_min = min_val[ch]
-            ch_max = max_val[ch]
-            normalized_image[ch] = (image[ch] - ch_min) / (ch_max - ch_min + 1e-8)
+        # Z-score normalization using precomputed statistics
+        normalized_image = (image - self.mean) / (self.stddev + 1e-8)
 
         # Convert to torch tensor
-        image = torch.from_numpy(normalized_image)
+        image = torch.from_numpy(normalized_image).float()
 
         # Apply SimCLR transforms if provided
         if self.transform:
@@ -207,22 +206,45 @@ class SimCLRModel(pl.LightningModule):
         return loss
 
     def configure_optimizers(self):
-        """Configure optimizer and scheduler"""
+        """Configure optimizer and scheduler with warmup + cosine annealing"""
         optimizer = torch.optim.Adam(
             self.parameters(),
             lr=self.learning_rate,
             weight_decay=self.weight_decay
         )
 
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, mode='min', factor=0.5, patience=10, verbose=True
+        # Get total epochs from trainer
+        max_epochs = self.trainer.max_epochs if self.trainer else 200
+        warmup_epochs = 10
+
+        # Create warmup scheduler (linear warmup from 0 to max_lr)
+        warmup_scheduler = torch.optim.lr_scheduler.LinearLR(
+            optimizer,
+            start_factor=1e-4,  # Start at lr * 1e-4
+            end_factor=1.0,     # End at lr * 1.0 (full lr)
+            total_iters=warmup_epochs
+        )
+
+        # Create cosine annealing scheduler (after warmup)
+        cosine_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer,
+            T_max=max_epochs - warmup_epochs,  # Remaining epochs after warmup
+            eta_min=1e-6  # Minimum learning rate
+        )
+
+        # Combine warmup + cosine annealing
+        scheduler = torch.optim.lr_scheduler.SequentialLR(
+            optimizer,
+            schedulers=[warmup_scheduler, cosine_scheduler],
+            milestones=[warmup_epochs]  # Switch at epoch 10
         )
 
         return {
             "optimizer": optimizer,
             "lr_scheduler": {
                 "scheduler": scheduler,
-                "monitor": "train_loss_epoch",
+                "interval": "epoch",
+                "frequency": 1,
             },
         }
 
@@ -241,6 +263,7 @@ def train_simclr(
     temperature=0.5,
     projection_dim=128,
     num_workers=4,
+    prefetch_factor=2,
     gpu_ids=None,
     checkpoint_dir="./checkpoints_data_splitted",
     log_dir="./logs_splitted",
@@ -286,11 +309,11 @@ def train_simclr(
         train_dataset,
         batch_size=batch_size,
         shuffle=True,
-        pin_memory=True,
+        pin_memory=use_gpu,
         drop_last=True,  # Important for contrastive learning
-        num_workers=32,
-        prefetch_factor=4,
-        persistent_workers=True, 
+        num_workers=num_workers,
+        prefetch_factor=prefetch_factor if num_workers > 0 else None,
+        persistent_workers=True if num_workers > 0 else False,
     )
 
     print(f"Train batches: {len(train_loader)}")
@@ -403,6 +426,8 @@ def main():
                         help='Projection head output dimension')
     parser.add_argument('--num_workers', type=int, default=4,
                         help='Number of data loader workers')
+    parser.add_argument('--prefetch_factor', type=int, default=2,
+                        help='Number of batches to prefetch per worker')
     parser.add_argument('--gpu_ids', type=str, default=None,
                         help='GPU IDs to use (e.g., "0" or "0,1,2,3")')
     parser.add_argument('--checkpoint_dir', type=str, default='./checkpoints_data_splitted',
@@ -436,6 +461,7 @@ def main():
         temperature=args.temperature,
         projection_dim=args.projection_dim,
         num_workers=args.num_workers,
+        prefetch_factor=args.prefetch_factor,
         gpu_ids=gpu_ids,
         checkpoint_dir=args.checkpoint_dir,
         log_dir=args.log_dir,
