@@ -1,0 +1,16 @@
+SimCLR Self-Supervised Pretraining Summary
+==========================================
+
+Experiment: simclr_pretrain_resnet34_20251215_031712
+Model: U-Net ResNet34 encoder with SimCLR
+Task: Self-supervised contrastive learning
+Dataset: CerraData-4MM (unlabeled training images)
+Training samples: 21203
+Batch size: 512
+Learning rate: 0.002
+Temperature: 0.3
+Projection dim: 128
+Total epochs: 1001
+Best checkpoint: /home/s52melba/CerraData_Project_Phenorob/checkpoints_data_splitted/simclr_pretrain_resnet34_20251215_031712/epoch=997-train_loss_epoch=3.6950.ckpt
+Encoder saved: /home/s52melba/CerraData_Project_Phenorob/checkpoints_data_splitted/simclr_pretrain_resnet34_20251215_031712/encoder_final.pth
+Final train loss: 3.695634365081787

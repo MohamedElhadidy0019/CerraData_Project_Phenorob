@@ -12,4 +12,5 @@ __pycache__/dataset.cpython-39.pyc
 *.ckpt
 *.yaml
 events.*
+*.pth
 
