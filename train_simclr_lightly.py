@@ -21,23 +21,211 @@ from lightly.models.modules import SimCLRProjectionHead
 from lightly.loss import NTXentLoss
 
 import kornia.augmentation as K
+import kornia.filters as KF
 
 
 
 class MultispectralSimCLRTransform:
-    def __init__(self):
-        self.aug = K.AugmentationSequential(
-            K.RandomResizedCrop(size=(128, 128), scale=(0.5, 1.0), ratio=(0.75, 1.33), p=0.9),
+    """
+    Strong augmentations for 12-channel multispectral satellite imagery.
+    Designed for contrastive learning where we need views that are
+    challenging to match but preserve semantic content.
+    """
+
+    def __init__(
+        self,
+        img_size: int = 128,
+        # Geometric augmentation params
+        crop_scale: tuple = (0.2, 1.0),  # More aggressive cropping
+        crop_ratio: tuple = (0.75, 1.33),
+        # Spectral augmentation params
+        band_drop_prob: float = 0.1,      # Probability to zero out each band
+        max_bands_drop: int = 3,          # Max bands to drop at once
+        intensity_jitter: float = 0.2,    # Per-band intensity scaling
+        noise_std: float = 0.05,          # Gaussian noise std
+        # Other params
+        blur_prob: float = 0.5,
+        solarize_prob: float = 0.2,
+        solarize_threshold: float = 0.5,
+    ):
+        self.img_size = img_size
+        self.band_drop_prob = band_drop_prob
+        self.max_bands_drop = max_bands_drop
+        self.intensity_jitter = intensity_jitter
+        self.noise_std = noise_std
+        self.solarize_prob = solarize_prob
+        self.solarize_threshold = solarize_threshold
+
+        # Geometric augmentations (applied consistently across all bands)
+        self.geometric_aug = K.AugmentationSequential(
+            K.RandomResizedCrop(
+                size=(img_size, img_size),
+                scale=crop_scale,
+                ratio=crop_ratio,
+                p=1.0  # Always crop - this is crucial
+            ),
             K.RandomHorizontalFlip(p=0.5),
             K.RandomVerticalFlip(p=0.5),
             K.RandomRotation(degrees=90, p=0.5),
-            K.RandomGaussianBlur(kernel_size=(7, 7), sigma=(0.1, 2.0), p=0.5),
-            data_keys=["input"], same_on_batch=False
+            data_keys=["input"],
+            same_on_batch=False
         )
-    
-    def __call__(self, img):
+
+        # Blur augmentation
+        self.blur = K.RandomGaussianBlur(
+            kernel_size=(3, 7),  # Smaller kernel range
+            sigma=(0.1, 2.0),
+            p=blur_prob
+        )
+
+    def _random_band_drop(self, img: torch.Tensor) -> torch.Tensor:
+        """
+        Randomly zero out some spectral bands.
+        Forces the model to not rely on any single band.
+
+        Args:
+            img: (C, H, W) tensor
+        """
+        if self.band_drop_prob <= 0:
+            return img
+
+        C = img.shape[0]
+        img = img.clone()
+
+        # Decide how many bands to drop (0 to max_bands_drop)
+        n_drop = torch.randint(0, self.max_bands_drop + 1, (1,)).item()
+
+        if n_drop > 0:
+            # Randomly select which bands to drop
+            drop_indices = torch.randperm(C)[:n_drop]
+            img[drop_indices] = 0.0
+
+        return img
+
+    def _intensity_jitter(self, img: torch.Tensor) -> torch.Tensor:
+        """
+        Per-band intensity scaling (like brightness/contrast for each band).
+        This is the MSI equivalent of color jitter.
+
+        Each band gets multiplied by a random factor in [1-jitter, 1+jitter]
+        and shifted by a random offset.
+        """
+        if self.intensity_jitter <= 0:
+            return img
+
+        C = img.shape[0]
+        img = img.clone()
+
+        # Per-band multiplicative scaling
+        scale = 1.0 + (torch.rand(C, 1, 1, device=img.device) * 2 - 1) * self.intensity_jitter
+
+        # Per-band additive shift (smaller magnitude)
+        shift = (torch.rand(C, 1, 1, device=img.device) * 2 - 1) * (self.intensity_jitter * 0.5)
+
+        img = img * scale + shift
+
+        return img
+
+    def _add_noise(self, img: torch.Tensor) -> torch.Tensor:
+        """Add Gaussian noise to simulate sensor noise."""
+        if self.noise_std <= 0:
+            return img
+
+        noise = torch.randn_like(img) * self.noise_std
+        return img + noise
+
+    def _solarize(self, img: torch.Tensor) -> torch.Tensor:
+        """
+        Solarize augmentation: invert pixels above threshold.
+        Works per-channel for MSI data.
+        """
+        if torch.rand(1).item() > self.solarize_prob:
+            return img
+
+        # Assuming data is normalized around 0, use absolute threshold
+        mask = img > self.solarize_threshold
+        img = img.clone()
+        img[mask] = -img[mask]  # Invert values above threshold
+
+        return img
+
+    def augment_single(self, img: torch.Tensor) -> torch.Tensor:
+        """
+        Apply full augmentation pipeline to a single image.
+
+        Args:
+            img: (C, H, W) tensor, already normalized
+
+        Returns:
+            Augmented (C, H, W) tensor
+        """
+        # 1. Geometric augmentations (add batch dim for kornia)
         img = img.unsqueeze(0)
-        return (self.aug(img).squeeze(0), self.aug(img).squeeze(0))
+        img = self.geometric_aug(img)
+        img = self.blur(img)
+        img = img.squeeze(0)
+
+        # 2. Spectral augmentations (MSI-specific)
+        img = self._intensity_jitter(img)
+        img = self._random_band_drop(img)
+        img = self._add_noise(img)
+        img = self._solarize(img)
+
+        return img
+
+    def __call__(self, img: torch.Tensor) -> tuple:
+        """
+        Generate two augmented views of the input image.
+
+        Args:
+            img: (C, H, W) tensor
+
+        Returns:
+            Tuple of two augmented views
+        """
+        view1 = self.augment_single(img)
+        view2 = self.augment_single(img)
+
+        return view1, view2
+
+
+class MultispectralSimCLRTransformStrong(MultispectralSimCLRTransform):
+    """
+    Even stronger augmentations for when the basic version plateaus.
+    Use this if the model still converges too quickly.
+    """
+
+    def __init__(self, img_size: int = 128):
+        super().__init__(
+            img_size=img_size,
+            crop_scale=(0.08, 1.0),      # Very aggressive crops (like ImageNet)
+            band_drop_prob=0.15,
+            max_bands_drop=4,             # Drop up to 4 of 12 bands
+            intensity_jitter=0.3,         # Stronger intensity changes
+            noise_std=0.08,
+            blur_prob=0.5,
+            solarize_prob=0.3,
+        )
+
+        # Add extra augmentations
+        self.cutout = K.RandomErasing(
+            p=0.3,
+            scale=(0.02, 0.2),
+            ratio=(0.3, 3.3),
+            value=0.0
+        )
+
+    def augment_single(self, img: torch.Tensor) -> torch.Tensor:
+        """Apply stronger augmentation pipeline."""
+        # Base augmentations
+        img = super().augment_single(img)
+
+        # Additional: Random erasing (cutout)
+        img = img.unsqueeze(0)
+        img = self.cutout(img)
+        img = img.squeeze(0)
+
+        return img
 
 
 class UnlabeledMSIDataset(Dataset):
