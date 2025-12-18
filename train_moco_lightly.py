@@ -22,7 +22,7 @@ from lightly.models.utils import deactivate_requires_grad, update_momentum
 from lightly.utils.scheduler import cosine_schedule
 
 # Import reusable components from SimCLR script
-from train_simclr_lightly import UnlabeledMSIDataset, MultispectralSimCLRTransform
+from train_simclr_lightly import UnlabeledMSIDataset, MultispectralSimCLRTransform, MultispectralSimCLRTransformStrong
 
 
 class MoCoModel(pl.LightningModule):
@@ -187,7 +187,7 @@ class MoCoModel(pl.LightningModule):
         cosine_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
             optimizer,
             T_max=max_epochs - warmup_epochs,
-            eta_min=1e-6
+            eta_min=1e-8
         )
 
         # Combine schedulers
@@ -255,8 +255,8 @@ def train_moco(
     print(f"Devices: {devices}")
     print(f"Strategy: {strategy}")
 
-    # Reuse transform from SimCLR script
-    transform = MultispectralSimCLRTransform()
+    # Use strong augmentations for MoCo training
+    transform = MultispectralSimCLRTransformStrong()
 
     # Reuse dataset from SimCLR script
     print("\nCreating unlabeled dataset (train split only)...")
