@@ -20,8 +20,8 @@ class CerraDataset(Dataset):
             split: 'train', 'val', or 'test'
             label_level: 'L1' (7 classes) or 'L2' (14 classes)
             transform: Optional transforms
-            global_stats: Optional tuple of (global_min, global_max) for normalization.
-                         If None, will compute from current split.
+            global_stats: Optional tuple of (mean, stddev) for z-score normalization.
+                         If None, will use precomputed statistics from CerraData-4MM.
         """
         self.data_dir = Path(data_dir)
         self.split = split
@@ -77,41 +77,40 @@ class CerraDataset(Dataset):
 
         self.num_classes = 14 if label_level == 'L2' else 7
 
-        # Set or compute global statistics for normalization
+        # Set or use precomputed global statistics for z-score normalization
         if global_stats is not None:
-            self.global_min, self.global_max = global_stats
+            self.mean, self.stddev = global_stats
             print(f"Using provided global statistics")
         else:
-            print(f"Computing global per-channel statistics from {split} split...")
-            self.global_min, self.global_max = self._compute_global_stats()
-            print(f"Global min per channel: {self.global_min}")
-            print(f"Global max per channel: {self.global_max}")
+            print(f"Using precomputed statistics from CerraData-4MM repository")
+            _, _, mean, stddev = self._data_info()
+            self.mean = np.array(mean).reshape(12, 1, 1).astype(np.float32)
+            self.stddev = np.array(stddev).reshape(12, 1, 1).astype(np.float32)
 
-    def _compute_global_stats(self):
-        """Compute global min/max per channel across all images in this split"""
-        num_channels = 12
-        channel_mins = [float('inf')] * num_channels
-        channel_maxs = [float('-inf')] * num_channels
+        print(f"Mean per channel: {self.mean.flatten()}")
+        print(f"Stddev per channel: {self.stddev.flatten()}")
 
-        print(f"Scanning {len(self.image_files)} images for statistics...")
-        for idx, img_path in enumerate(self.image_files):
-            if idx % 100 == 0:
-                print(f"  Processed {idx}/{len(self.image_files)} images...")
-
-            with rasterio.open(img_path) as src:
-                image = src.read()  # Shape: (12, H, W)
-                image = image.astype(np.float32)
-
-            # Update min/max for each channel
-            for ch in range(num_channels):
-                ch_min = image[ch].min()
-                ch_max = image[ch].max()
-                channel_mins[ch] = min(channel_mins[ch], ch_min)
-                channel_maxs[ch] = max(channel_maxs[ch], ch_max)
-
-        print(f"  Processed {len(self.image_files)}/{len(self.image_files)} images. Done!")
-        return channel_mins, channel_maxs
+    def _data_info(self):
+        # source: https://github.com/ai4luc/CerraData-4MM/blob/main/CerraData-4MM%20Experiments/util/dataset_loader.py
         
+        min = [99.78856658935547, 332.65665627643466, 347.161809168756, 331.4168453961611,
+                196.89053159952164, 240.9765984416008, 261.34731489419937, 342.50664601475,
+                277.87501442432404, 246.40860325098038, 265.9057685136795, 226.23770987987518]
+        
+        max = [7349.042938232482, 8987.99301147458, 8906.377044677738, 9027.435272216775,
+                9090.25390625, 8949.610290527282, 8955.640045166012, 9491.945373535062,
+                9026.07144165042, 11857.606872558594, 11817.384948730469, 13970.691894531188]
+        
+        mean = [1331.2999603920011, 1422.618248839035, 1648.7418838236356, 1811.0396095371318,
+                2243.6360604171587, 2862.469356914663, 3158.7246770243464, 3253.5804747400075,
+                3464.1887187200564, 3463.5260019211623, 3635.662557047575, 2740.6395025025904]
+        
+        stddev = [436.04697715189127, 484.32797096427566, 549.125419913045, 741.2668466992163,
+                788.8006282648606, 860.9668486457188, 963.2983618801512, 1000.2677835011111,
+                1087.111000434025, 1062.9960118331512, 1373.6088616321088, 1125.5168224477407]
+
+        return max, min, mean, stddev
+   
     def __len__(self):
         return len(self.image_files)
     
@@ -146,15 +145,11 @@ class CerraDataset(Dataset):
                 label_l1[label == l2_class] = l1_class
             label = label_l1
 
-        # Per-channel normalization using global statistics
-        normalized_image = np.zeros_like(image)
-        for ch in range(12):
-            ch_min = self.global_min[ch]
-            ch_max = self.global_max[ch]
-            normalized_image[ch] = (image[ch] - ch_min) / (ch_max - ch_min + 1e-8)
+        # Z-score normalization using precomputed mean and stddev
+        normalized_image = (image - self.mean) / (self.stddev + 1e-8)
 
         # Convert to torch tensors
-        image = torch.from_numpy(normalized_image)
+        image = torch.from_numpy(normalized_image).float()
         label = torch.from_numpy(label)
 
         if self.transform:
@@ -168,16 +163,16 @@ class CerraDataset(Dataset):
 def create_data_loaders(data_dir, batch_size=16, num_workers=4, label_level='L2', data_percentage=100):
     """Create train, validation, and test data loaders from physically split dataset
 
-    Global statistics are computed from the training set and shared across all splits
-    to ensure consistent normalization.
+    All datasets use the same precomputed statistics from CerraData-4MM repository
+    to ensure consistent z-score normalization across all splits.
     """
 
-    # Create training dataset first (computes global statistics)
+    # Create training dataset first
     print("\n=== Creating Training Dataset ===")
     train_dataset = CerraDataset(data_dir, split='train', label_level=label_level)
 
-    # Extract global statistics from training set
-    global_stats = (train_dataset.global_min, train_dataset.global_max)
+    # Extract global statistics from training set (precomputed mean/stddev)
+    global_stats = (train_dataset.mean, train_dataset.stddev)
 
     # Create val and test datasets using the same statistics
     print("\n=== Creating Validation Dataset ===")

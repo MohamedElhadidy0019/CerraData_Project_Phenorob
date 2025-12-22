@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Fine-tune L2 model using SimCLR pretrained encoder
+Fine-tune L2 model using MoCo pretrained encoder
 """
 import os
 import torch
@@ -16,7 +16,7 @@ from model import UNetSegmentation
 
 
 def train_l2_from_simclr(
-    simclr_encoder_path,
+    moco_encoder_path,
     data_dir,
     batch_size=100,
     num_epochs=100,
@@ -26,17 +26,19 @@ def train_l2_from_simclr(
     checkpoint_dir="./checkpoints_data_splitted",
     log_dir="./logs_splitted",
     experiment_name=None,
-    data_percentage=5
+    data_percentage=5,
+    patience=40
 ):
-    """Fine-tune L2 model using SimCLR pretrained encoder"""
+    """Fine-tune L2 model using MoCo pretrained encoder"""
 
-    print("=== Fine-tuning L2 Model from SimCLR Pretraining ===")
-    print(f"SimCLR encoder: {simclr_encoder_path}")
+    print("=== Fine-tuning L2 Model from MoCo Pretraining ===")
+    print(f"MoCo encoder: {moco_encoder_path}")
     print(f"Data directory: {data_dir}")
     print(f"Batch size: {batch_size}")
     print(f"Learning rate: {learning_rate}")
     print(f"Max epochs: {num_epochs}")
     print(f"Data percentage: {data_percentage}%")
+    print(f"Early stopping patience: {patience}")
     print(f"GPU IDs: {gpu_ids}")
 
     # Handle GPU configuration
@@ -78,9 +80,9 @@ def train_l2_from_simclr(
         learning_rate=learning_rate
     )
 
-    # Load SimCLR pretrained encoder weights
-    print(f"\nLoading SimCLR pretrained encoder from: {simclr_encoder_path}")
-    encoder_state_dict = torch.load(simclr_encoder_path, map_location='cpu')
+    # Load MoCo pretrained encoder weights
+    print(f"\nLoading MoCo pretrained encoder from: {moco_encoder_path}")
+    encoder_state_dict = torch.load(moco_encoder_path, map_location='cpu')
     l2_model.model.encoder.load_state_dict(encoder_state_dict)
     print("✓ Encoder weights loaded successfully")
 
@@ -95,7 +97,7 @@ def train_l2_from_simclr(
     # Setup callbacks
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     if experiment_name is None:
-        experiment_name = f"l2_from_simclr_{data_percentage}percent_{timestamp}"
+        experiment_name = f"l2_from_moco_{data_percentage}percent_{timestamp}"
     else:
         experiment_name = f"{experiment_name}_{timestamp}"
 
@@ -111,7 +113,7 @@ def train_l2_from_simclr(
 
     early_stop_callback = EarlyStopping(
         monitor='val_loss',
-        patience=20,
+        patience=patience,
         verbose=True,
         mode='min'
     )
@@ -153,12 +155,12 @@ def train_l2_from_simclr(
     # Save final results
     results_file = os.path.join(checkpoint_callback.dirpath, "training_summary.txt")
     with open(results_file, 'w') as f:
-        f.write(f"L2 Fine-tuning from SimCLR Summary\n")
-        f.write(f"====================================\n\n")
+        f.write(f"L2 Fine-tuning from MoCo Summary\n")
+        f.write(f"==================================\n\n")
         f.write(f"Experiment: {experiment_name}\n")
-        f.write(f"Model: U-Net with ResNet34 encoder (SimCLR pretrained → L2 fine-tuned)\n")
+        f.write(f"Model: U-Net with ResNet34 encoder (MoCo pretrained → L2 fine-tuned)\n")
         f.write(f"Task: 14-class semantic segmentation (L2 labels)\n")
-        f.write(f"Pretraining: SimCLR encoder from {simclr_encoder_path}\n")
+        f.write(f"Pretraining: MoCo encoder from {moco_encoder_path}\n")
         f.write(f"Dataset: CerraData-4MM\n")
         f.write(f"Training samples: {len(train_loader.dataset)}\n")
         f.write(f"Validation samples: {len(val_loader.dataset)}\n")
@@ -180,9 +182,9 @@ def train_l2_from_simclr(
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Fine-tune L2 model from SimCLR encoder')
-    parser.add_argument('--simclr_encoder', type=str, required=True,
-                        help='Path to SimCLR pretrained encoder (.pth file)')
+    parser = argparse.ArgumentParser(description='Fine-tune L2 model from MoCo encoder')
+    parser.add_argument('--moco_encoder', type=str, required=True,
+                        help='Path to MoCo pretrained encoder (.pth file)')
     parser.add_argument('--data_dir', type=str, required=True,
                         help='Path to dataset directory')
     parser.add_argument('--batch_size', type=int, default=100,
@@ -203,16 +205,18 @@ def main():
                         help='Custom experiment name (timestamp will be appended)')
     parser.add_argument('--data_percentage', type=int, default=5,
                         help='Percentage of data to use (1-100)')
+    parser.add_argument('--patience', type=int, default=40,
+                        help='Early stopping patience (number of epochs)')
 
     args = parser.parse_args()
 
     # Set seeds for reproducibility
     pl.seed_everything(42, workers=True)
 
-    # Check if SimCLR encoder exists
-    if not os.path.exists(args.simclr_encoder):
-        print(f"Error: SimCLR encoder '{args.simclr_encoder}' not found!")
-        print("Please run SimCLR pretraining first with: python train_simclr_lightly.py")
+    # Check if MoCo encoder exists
+    if not os.path.exists(args.moco_encoder):
+        print(f"Error: MoCo encoder '{args.moco_encoder}' not found!")
+        print("Please run MoCo pretraining first")
         return
 
     # Check if data directory exists
@@ -227,7 +231,7 @@ def main():
 
     # Fine-tune L2 model
     model, trainer, best_model_path = train_l2_from_simclr(
-        simclr_encoder_path=args.simclr_encoder,
+        moco_encoder_path=args.moco_encoder,
         data_dir=args.data_dir,
         batch_size=args.batch_size,
         num_epochs=args.num_epochs,
@@ -237,7 +241,8 @@ def main():
         checkpoint_dir=args.checkpoint_dir,
         log_dir=args.log_dir,
         experiment_name=args.experiment_name,
-        data_percentage=args.data_percentage
+        data_percentage=args.data_percentage,
+        patience=args.patience
     )
 
 
