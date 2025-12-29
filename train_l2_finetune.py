@@ -25,7 +25,8 @@ def train_l2_finetune(
     checkpoint_dir="./checkpoints",
     log_dir="./logs",
     experiment_name=None,
-    data_percentage=100
+    data_percentage=100,
+    patience=20
 ):
     """Fine-tune L2 model using L1 pretrained weights"""
     
@@ -112,7 +113,7 @@ def train_l2_finetune(
     
     early_stop_callback = EarlyStopping(
         monitor='val_loss',
-        patience=20,
+        patience=patience,
         verbose=True,
         mode='min'
     )
@@ -202,7 +203,9 @@ def main():
                         help='Custom experiment name (timestamp will be appended)')
     parser.add_argument('--data_percentage', type=int, default=100,
                         help='Percentage of data to use (1-100)')
-    
+    parser.add_argument('--patience', type=int, default=20,
+                        help='Early stopping patience (number of epochs)')
+
     args = parser.parse_args()
     
     # Set seeds for reproducibility
@@ -237,7 +240,8 @@ def main():
         checkpoint_dir=args.checkpoint_dir,
         log_dir=args.log_dir,
         experiment_name=args.experiment_name,
-        data_percentage=args.data_percentage
+        data_percentage=args.data_percentage,
+        patience=args.patience
     )
 
 if __name__ == "__main__":

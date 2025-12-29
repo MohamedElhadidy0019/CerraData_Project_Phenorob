@@ -24,7 +24,8 @@ def train_baseline(
     log_dir="./logs",
     label_level="L2",
     experiment_name=None,
-    data_percentage=100
+    data_percentage=100,
+    patience=20
 ):
     """Train baseline model with random initialization on L1 (7-class) or L2 (14-class) segmentation"""
     
@@ -101,7 +102,7 @@ def train_baseline(
     
     early_stop_callback = EarlyStopping(
         monitor='val_loss',
-        patience=20,
+        patience=patience,
         verbose=True,
         mode='min'
     )
@@ -190,7 +191,9 @@ def main():
                         help='Custom experiment name (timestamp will be appended)')
     parser.add_argument('--data_percentage', type=int, default=100,
                         help='Percentage of data to use (1-100)')
-    
+    parser.add_argument('--patience', type=int, default=20,
+                        help='Early stopping patience (number of epochs)')
+
     args = parser.parse_args()
     
     # Set seeds for reproducibility
@@ -219,7 +222,8 @@ def main():
         log_dir=args.log_dir,
         label_level=args.label_level,
         experiment_name=args.experiment_name,
-        data_percentage=args.data_percentage
+        data_percentage=args.data_percentage,
+        patience=args.patience
     )
 
 if __name__ == "__main__":

@@ -184,24 +184,30 @@ def create_data_loaders(data_dir, batch_size=16, num_workers=4, label_level='L2'
     # For training: use percentage of train and val, but ALWAYS use full test set
     if data_percentage < 100:
         random.seed(42)  # For reproducibility
-        
+
         # Calculate subset sizes (only for train and val)
         train_size = int(len(train_dataset) * data_percentage / 100)
         val_size = int(len(val_dataset) * data_percentage / 100)
         # test_size = len(test_dataset)  # Always use full test set
-        
+
+        # Ensure minimum 5 validation samples for meaningful metrics
+        MIN_VAL_SAMPLES = 5
+        if val_size < MIN_VAL_SAMPLES:
+            val_size = min(MIN_VAL_SAMPLES, len(val_dataset))
+            print(f"⚠️  Validation size adjusted: {data_percentage}% would give {int(len(val_dataset) * data_percentage / 100)} samples, using minimum {val_size} instead")
+
         # Create random indices for train and val only
         train_indices = random.sample(range(len(train_dataset)), train_size)
         val_indices = random.sample(range(len(val_dataset)), val_size)
-        
+
         # Create subset datasets
         train_dataset = Subset(train_dataset, train_indices)
         val_dataset = Subset(val_dataset, val_indices)
         # test_dataset remains unchanged (full test set)
-        
+
         print(f"Using {data_percentage}% of train/val data:")
         print(f"  Train samples: {len(train_dataset)} ({data_percentage}% of original)")
-        print(f"  Val samples: {len(val_dataset)} ({data_percentage}% of original)")
+        print(f"  Val samples: {len(val_dataset)} (minimum {MIN_VAL_SAMPLES} enforced)")
         print(f"  Test samples: {len(test_dataset)} (100% - full test set)")
     else:
         print(f"Using full dataset (100%)")
