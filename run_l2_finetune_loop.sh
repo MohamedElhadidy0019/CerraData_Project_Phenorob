@@ -11,7 +11,8 @@ echo "Starting at: $(date)"
 echo "Using L1 checkpoint: $L1_CHECKPOINT"
 
 # Define percentages to test
-PERCENTAGES="0.5 1 2.5 3.5 5 10 25 50"
+# PERCENTAGES="0.5 1 2.5 3.5 5 10 25 50"
+PERCENTAGES="0.5 2.5 3.5"
 
 # Early stopping patience
 PATIENCE=30
@@ -42,7 +43,7 @@ for PCT in $PERCENTAGES; do
         --experiment_name "l2_finetune_14classes_from_l1_${PCT_NAME}percent" \
         --gpu_ids "0" \
         --batch_size 100 \
-        --num_epochs 100 \
+        --num_epochs 300 \
         --learning_rate 1e-4 \
         --checkpoint_dir "$CHECKPOINT_BASE" \
         --log_dir "$LOG_BASE" \

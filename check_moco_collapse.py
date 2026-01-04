@@ -19,7 +19,7 @@ import segmentation_models_pytorch as smp
 # ============================================================================
 
 # Path to your MoCo checkpoint (the .ckpt file from PyTorch Lightning)
-CHECKPOINT_PATH = "./checkpoints_data_splitted/moco_pretrain_resnet34_TIMESTAMP/last.ckpt"
+CHECKPOINT_PATH = "./checkpoints_data_splitted/moco_pretrain_resnet34_v2_more_aggressive_20251218_114641/last.ckpt"
 
 # Path to your data directory
 DATA_DIR = "/home/s52melba/CerraData_Project_Phenorob/cerradata_splitted"

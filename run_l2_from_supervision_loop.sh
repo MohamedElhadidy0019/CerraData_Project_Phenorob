@@ -5,7 +5,7 @@
 
 # UPDATE THIS PATH after SimCLR/MoCo pretraining completes!
 # The encoder will be saved in: checkpoints_data_splitted/simclr_pretrain_resnet34_TIMESTAMP/encoder_final.pth
-MOCO_ENCODER="./checkpoints_data_splitted/simclr_pretrain_resnet34_TIMESTAMP/encoder_final.pth"
+MOCO_ENCODER="./checkpoints_data_splitted/moco_pretrain_resnet34_v2_more_aggressive_20251218_114641/encoder_final.pth"
 
 echo "=== L2 FINE-TUNING FROM SELF-SUPERVISED PRETRAINING - MULTIPLE DATA PERCENTAGES ==="
 echo "Using encoder: $MOCO_ENCODER"
@@ -43,7 +43,7 @@ for PCT in $PERCENTAGES; do
         --experiment_name "l2_from_simclr_${PCT_NAME}percent" \
         --gpu_ids "0" \
         --batch_size 100 \
-        --num_epochs 100 \
+        --num_epochs 300 \
         --learning_rate 1e-4 \
         --data_percentage $PCT \
         --patience $PATIENCE \

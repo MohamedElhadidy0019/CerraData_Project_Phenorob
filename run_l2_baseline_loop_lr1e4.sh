@@ -1,21 +1,21 @@
 #!/bin/bash
-#SBATCH --job-name=l2_baseline_loop
-#SBATCH --output=logs/l2_baseline_loop_%j.out
-#SBATCH --error=logs/l2_baseline_loop_%j.err
+#SBATCH --job-name=l2_baseline_lr1e4_loop
+#SBATCH --output=logs/l2_baseline_lr1e4_loop_%j.out
+#SBATCH --error=logs/l2_baseline_lr1e4_loop_%j.err
 
-echo "=== L2 BASELINE EXPERIMENT - MULTIPLE DATA PERCENTAGES ==="
+echo "=== L2 BASELINE EXPERIMENT (LR=1e-4) - MULTIPLE DATA PERCENTAGES ==="
 echo "Starting at: $(date)"
 
 # Define percentages to test
-# PERCENTAGES="0.5 1 2.5 3.5 5 10 25 50"
-PERCENTAGES="0.5 2.5 3.5"
+PERCENTAGES="0.5 1 2.5 3.5 5 10 25 50"
+# PERCENTAGES="0.5 2.5 3.5"
 
 # Early stopping patience
 PATIENCE=30
 
-# Organized directories for scaling experiments
-LOG_BASE="./logs_scaling_experiments/baseline"
-CHECKPOINT_BASE="./checkpoints_scaling_experiments/baseline"
+# Organized directories for scaling experiments (NEW: baseline_1e4)
+LOG_BASE="./logs_scaling_experiments/baseline_1e4"
+CHECKPOINT_BASE="./checkpoints_scaling_experiments/baseline_1e4"
 
 # Create directories if they don't exist
 mkdir -p "$LOG_BASE"
@@ -23,6 +23,7 @@ mkdir -p "$CHECKPOINT_BASE"
 
 echo "Logs will be saved to: $LOG_BASE"
 echo "Checkpoints will be saved to: $CHECKPOINT_BASE"
+echo "Learning Rate: 1e-4"
 
 for PCT in $PERCENTAGES; do
     # Convert percentage to safe filename (replace . with p)
@@ -30,17 +31,17 @@ for PCT in $PERCENTAGES; do
 
     echo ""
     echo "========================================="
-    echo "Running L2 Baseline with ${PCT}% data"
+    echo "Running L2 Baseline (lr=1e-4) with ${PCT}% data"
     echo "========================================="
 
     python train_baseline.py \
         --data_dir /home/s52melba/CerraData_Project_Phenorob/cerradata_splitted \
         --label_level L2 \
-        --experiment_name "l2_baseline_14classes_${PCT_NAME}percent" \
+        --experiment_name "l2_baseline_14classes_lr1e-4_${PCT_NAME}percent" \
         --gpu_ids "0" \
         --batch_size 100 \
         --num_epochs 300 \
-        --learning_rate 1e-3 \
+        --learning_rate 1e-4 \
         --checkpoint_dir "$CHECKPOINT_BASE" \
         --log_dir "$LOG_BASE" \
         --data_percentage $PCT \
@@ -50,5 +51,5 @@ for PCT in $PERCENTAGES; do
 done
 
 echo ""
-echo "=== ALL L2 BASELINE EXPERIMENTS COMPLETED ==="
+echo "=== ALL L2 BASELINE (LR=1e-4) EXPERIMENTS COMPLETED ==="
 echo "Finished at: $(date)"

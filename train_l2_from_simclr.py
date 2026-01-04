@@ -203,8 +203,8 @@ def main():
                         help='Directory to save logs')
     parser.add_argument('--experiment_name', type=str, default=None,
                         help='Custom experiment name (timestamp will be appended)')
-    parser.add_argument('--data_percentage', type=int, default=5,
-                        help='Percentage of data to use (1-100)')
+    parser.add_argument('--data_percentage', type=float, default=5,
+                        help='Percentage of data to use (0.1-100, accepts decimals)')
     parser.add_argument('--patience', type=int, default=40,
                         help='Early stopping patience (number of epochs)')
 
