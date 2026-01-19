@@ -21,7 +21,8 @@ class UNetSegmentation(pl.LightningModule):
         num_classes=None,  # Must be specified (7 for L1, 14 for L2)
         encoder_name="resnet34",
         learning_rate=1e-3,
-        weight_decay=1e-4,
+        weight_decay=1e-3,
+        dropout_rate=0.3,
         class_weights=None
     ):
         super().__init__()
@@ -33,6 +34,7 @@ class UNetSegmentation(pl.LightningModule):
         self.num_classes = num_classes
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
+        self.dropout_rate = dropout_rate
         
         print(f"UNetSegmentation initialized with {num_classes} classes")
         
@@ -45,6 +47,11 @@ class UNetSegmentation(pl.LightningModule):
             activation=None  # We'll apply softmax in forward pass
         )
         
+        # Add dropout layers for different parts of the network
+        self.encoder_dropout = nn.Dropout2d(p=self.dropout_rate)  # For encoder features
+        self.decoder_dropout = nn.Dropout2d(p=self.dropout_rate)  # For decoder features
+        self.bottleneck_dropout = nn.Dropout2d(p=min(self.dropout_rate * 1.5, 0.5))  # Higher dropout at bottleneck, capped at 0.5
+        
         # Loss function with class weights if provided
         if class_weights is not None:
             class_weights = torch.tensor(class_weights, dtype=torch.float32)
@@ -56,8 +63,29 @@ class UNetSegmentation(pl.LightningModule):
         self.test_step_outputs = []
         
     def forward(self, x):
-        """Forward pass"""
-        logits = self.model(x)
+        """Forward pass with integrated dropout"""
+        # Use the encoder from the U-Net model
+        features = self.model.encoder(x)
+        
+        # Apply dropout to encoder features during training
+        if self.training:
+            # Apply dropout to intermediate encoder features (skip connections)
+            features = [self.encoder_dropout(feat) if i > 0 else feat 
+                       for i, feat in enumerate(features)]
+            
+            # Apply stronger dropout to bottleneck (last encoder feature)
+            features[-1] = self.bottleneck_dropout(features[-1])
+        
+        # Use the decoder from the U-Net model - pass features as list, not unpacked
+        decoder_output = self.model.decoder(features)
+        
+        # Apply dropout to decoder output during training
+        if self.training:
+            decoder_output = self.decoder_dropout(decoder_output)
+        
+        # Apply segmentation head to get final logits
+        logits = self.model.segmentation_head(decoder_output)
+        
         return logits
     
     def training_step(self, batch, batch_idx):
@@ -246,8 +274,16 @@ class UNetSegmentation(pl.LightningModule):
             weight_decay=self.weight_decay
         )
         
+        # More aggressive learning rate decay to reduce fluctuations
         scheduler = ReduceLROnPlateau(
-            optimizer, mode='min', factor=0.5, patience=5, verbose=True
+            optimizer, 
+            mode='min', 
+            factor=0.3,  # Reduce LR by 70% when triggered
+            patience=3,  # Trigger after 3 epochs without improvement
+            min_lr=1e-7,  # Minimum learning rate
+            verbose=True,
+            threshold=0.01,  # Minimum change to qualify as an improvement
+            cooldown=2  # Wait 2 epochs before resuming normal operation
         )
         
         return {
@@ -255,16 +291,20 @@ class UNetSegmentation(pl.LightningModule):
             "lr_scheduler": {
                 "scheduler": scheduler,
                 "monitor": "val_loss",
+                "frequency": 1,
+                "interval": "epoch",
             },
         }
 
-def create_model(in_channels=12, num_classes=None, encoder_name="resnet34", learning_rate=1e-3):
+def create_model(in_channels=12, num_classes=14, encoder_name="resnet34", learning_rate=1e-3, dropout_rate=0.3, weight_decay=1e-3):
     """Create U-Net model with random initialization (no pretrained weights)"""
     model = UNetSegmentation(
         in_channels=in_channels,
         num_classes=num_classes,
         encoder_name=encoder_name,
-        learning_rate=learning_rate
+        learning_rate=learning_rate,
+        dropout_rate=dropout_rate,
+        weight_decay=weight_decay
     )
     return model
 
