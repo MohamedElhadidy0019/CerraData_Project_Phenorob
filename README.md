@@ -53,10 +53,6 @@ bash scripts/run_l2_baseline.sh
 - **Input**: 12-channel Sentinel-2 images (128x128 pixels)
 - **Dataset**: CerraData-4MM
 
-## Documentation
-
-- [PROJECT_OVERVIEW.md](PROJECT_OVERVIEW.md) - Detailed training procedures and research questions
-- [README_USAGE.md](README_USAGE.md) - Usage examples
 
 ## Data Scaling Experiments
 
