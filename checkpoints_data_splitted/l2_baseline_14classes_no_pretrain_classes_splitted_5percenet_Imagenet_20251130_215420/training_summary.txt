@@ -1,0 +1,55 @@
+Baseline Model Training Summary
+================================
+
+Experiment: l2_baseline_14classes_no_pretrain_classes_splitted_5percenet_Imagenet_20251130_215420
+Model: U-Net with ResNet34 encoder (random initialization)
+Task: 14-class semantic segmentation (L2 labels)
+Dataset: CerraData-4MM
+Training samples: 1060
+Validation samples: 227
+Test samples: 4544
+Batch size: 100
+Learning rate: 0.001
+Total epochs: 40
+Best checkpoint: /home/s52melba/CerraData_Project_Phenorob/checkpoints_data_splitted/l2_baseline_14classes_no_pretrain_classes_splitted_5percenet_Imagenet_20251130_215420/epoch=34-val_loss=0.8686-val_f1_macro=0.3321.ckpt
+Final validation loss: N/A
+Final validation F1: N/A
+Final validation IoU: N/A
+
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+       Test metric             DataLoader 0                                                                                                                                                   
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+        test_acc            0.7439042329788208                                                                                                                                                
+     test_f1_class_0        0.7436116933822632
+     test_f1_class_1        0.8054706454277039
+    test_f1_class_10       0.004283557645976543 
+    test_f1_class_11        0.47947970032691956 
+    test_f1_class_12                0.0
+    test_f1_class_13        0.04745304957032204 
+     test_f1_class_2        0.22023054957389832 
+     test_f1_class_3        0.8865265250205994
+     test_f1_class_4                0.0
+     test_f1_class_5                0.0
+     test_f1_class_6                0.0
+     test_f1_class_7        0.7457537055015564
+     test_f1_class_8                0.0
+     test_f1_class_9                0.0
+      test_f1_macro         0.28091496229171753 
+    test_f1_weighted        0.7248642444610596
+    test_iou_class_0        0.5918645262718201
+    test_iou_class_1        0.6742995977401733
+    test_iou_class_10      0.0021463758312165737
+    test_iou_class_11       0.31533923745155334 
+    test_iou_class_12               0.0
+    test_iou_class_13      0.024303153157234192 
+    test_iou_class_2        0.12374105304479599 
+    test_iou_class_3        0.7961810827255249
+    test_iou_class_4                0.0
+    test_iou_class_5                0.0
+    test_iou_class_6                0.0
+    test_iou_class_7        0.5945831537246704
+    test_iou_class_8                0.0
+    test_iou_class_9                0.0
+     test_iou_macro         0.22303272783756256 
+        test_loss            0.881972074508667
