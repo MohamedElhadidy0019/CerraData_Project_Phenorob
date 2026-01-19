@@ -1,18 +1,38 @@
-# all in kaggle_temp
-kaggle_temp/
-# whats in checkpoints
-checkpoints/
-cerradata_splitted/
-logs/
-*.pyc
+# Python
 __pycache__/
+*.py[cod]
+*.so
+.Python
+*.egg-info/
+.eggs/
 
-__pycache__/dataset.cpython-39.pyc
+# Data and temp files
+kaggle_temp/
+cerradata_splitted/
 *.png
-*.ckpt
-*.yaml
-events.*
-*.pth
+*.jpg
+*.jpeg
+*.tif
+*.tiff
 
-checkpoints_data_splitted/moco_pretrain_resnet34_20251215_185057/training_summary.txt
+# Model artifacts
+checkpoints/
+*.ckpt
+*.pth
+*.pt
+
+# Logs and outputs
+logs/
 *.txt
+*.log
+events.*
+*.yaml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Jupyter
+.ipynb_checkpoints/

@@ -45,8 +45,8 @@ Pa, V1, V2, Wt, Mg, UA, OB, Ft, PR, SP, T1, T1+, OU, Df
 - Data percentage: Configurable via `--data_percentage` (0.1-100)
 
 **Used by**:
-- `run_l1_pretrain.sh` - L1 baseline (7 classes, 100 epochs, 100% data)
-- `run_l2_baseline.sh` - L2 baseline (14 classes, 200 epochs, 5% data)
+- `scripts/run_l1_pretrain.sh` - L1 baseline (7 classes, 100 epochs, 100% data)
+- `scripts/run_l2_baseline.sh` - L2 baseline (14 classes, 200 epochs, 5% data)
 
 ---
 
@@ -66,7 +66,7 @@ Pa, V1, V2, Wt, Mg, UA, OB, Ft, PR, SP, T1, T1+, OU, Df
 - Inherits other settings from baseline
 
 **Used by**:
-- `run_l2_finetune.sh` - 5% data, 100 epochs
+- `scripts/run_l2_finetune.sh` - 5% data, 100 epochs
 
 **Research Question**: Does learning coarse labels first help fine-grained segmentation?
 
@@ -98,7 +98,7 @@ Pa, V1, V2, Wt, Mg, UA, OB, Ft, PR, SP, T1, T1+, OU, Df
 - Projection dim: 128
 
 **Used by**:
-- `run_simclr_pretrain.sh`
+- `scripts/run_simclr_pretrain.sh`
 
 ---
 
@@ -130,7 +130,7 @@ Pa, V1, V2, Wt, Mg, UA, OB, Ft, PR, SP, T1, T1+, OU, Df
 - Optimizer: SGD with momentum 0.9
 
 **Used by**:
-- `run_moco_pretrain.sh`
+- `scripts/run_moco_pretrain.sh`
 
 ---
 
@@ -151,7 +151,7 @@ Pa, V1, V2, Wt, Mg, UA, OB, Ft, PR, SP, T1, T1+, OU, Df
 - Typically used with limited labeled data (0.1%-10%)
 
 **Used by**:
-- `run_l2_from_self_supervision.sh`
+- `scripts/run_l2_from_self_supervision.sh`
 
 **Research Question**: Does self-supervised pretraining help in low-data scenarios?
 
@@ -188,22 +188,24 @@ Unlabeled Data → SimCLR/MoCo Pretraining
 
 ## Shell Scripts Reference
 
+All shell scripts are located in the `scripts/` directory.
+
 ### Pretraining Scripts
-- `run_l1_pretrain.sh` → `train_baseline.py` (L1, 100% data)
-- `run_simclr_pretrain.sh` → `train_simclr_lightly.py`
-- `run_moco_pretrain.sh` → `train_moco_lightly.py`
+- `scripts/run_l1_pretrain.sh` → `train_baseline.py` (L1, 100% data)
+- `scripts/run_simclr_pretrain.sh` → `train_simclr_lightly.py`
+- `scripts/run_moco_pretrain.sh` → `train_moco_lightly.py`
 
 ### L2 Training Scripts (Single Runs)
-- `run_l2_baseline.sh` → `train_baseline.py` (L2, 5% data)
-- `run_l2_finetune.sh` → `train_l2_finetune.py` (from L1)
-- `run_l2_from_self_supervision.sh` → `train_l2_from_simclr.py`
+- `scripts/run_l2_baseline.sh` → `train_baseline.py` (L2, 5% data)
+- `scripts/run_l2_finetune.sh` → `train_l2_finetune.py` (from L1)
+- `scripts/run_l2_from_self_supervision.sh` → `train_l2_from_simclr.py`
 
 ### L2 Training Scripts (Data Scaling Experiments)
 **NEW**: These scripts loop through multiple data percentages automatically:
 
-- `run_l2_baseline_loop.sh` → Baseline across all percentages
-- `run_l2_finetune_loop.sh` → L1→L2 fine-tuning across all percentages
-- `run_l2_from_supervision_loop.sh` → Self-supervised→L2 across all percentages
+- `scripts/run_l2_baseline_loop.sh` → Baseline across all percentages
+- `scripts/run_l2_finetune_loop.sh` → L1→L2 fine-tuning across all percentages
+- `scripts/run_l2_from_supervision_loop.sh` → Self-supervised→L2 across all percentages
 
 **Tested Percentages**: 0.1%, 0.5%, 1%, 2.5%, 5%, 10%, 25%, 50%, 100%
 
@@ -218,12 +220,12 @@ Unlabeled Data → SimCLR/MoCo Pretraining
 - Adjust `PATIENCE` variable if needed (default: 20 for baseline/finetune, 40 for self-supervised)
 
 ### Utility Scripts
-- `run_inference.sh` - Run inference on test set
-- `run_test_model.sh` - Test trained model
-- `run_dataset_test.sh` - Validate dataset loading
-- `run_create_splits.sh` - Create train/val/test splits
-- `run_debug.sh` - Debug mode training
-- `run_examples.sh` - Example usage
+- `scripts/run_inference.sh` - Run inference on test set
+- `scripts/run_test_model.sh` - Test trained model
+- `scripts/run_dataset_test.sh` - Validate dataset loading
+- `scripts/run_create_splits.sh` - Create train/val/test splits
+- `scripts/run_debug.sh` - Debug mode training
+- `scripts/run_examples.sh` - Example usage
 
 ---
 
@@ -311,15 +313,15 @@ The project includes automated data scaling experiments to compare how different
 
 ```bash
 # 1. First, ensure you have pretrained checkpoints
-# - L1 checkpoint from run_l1_pretrain.sh
-# - SimCLR/MoCo encoder from run_simclr_pretrain.sh or run_moco_pretrain.sh
+# - L1 checkpoint from scripts/run_l1_pretrain.sh
+# - SimCLR/MoCo encoder from scripts/run_simclr_pretrain.sh or scripts/run_moco_pretrain.sh
 
 # 2. Update checkpoint paths in the loop scripts
 
 # 3. Run all three experiments
-sbatch run_l2_baseline_loop.sh
-sbatch run_l2_finetune_loop.sh
-sbatch run_l2_from_supervision_loop.sh
+sbatch scripts/run_l2_baseline_loop.sh
+sbatch scripts/run_l2_finetune_loop.sh
+sbatch scripts/run_l2_from_supervision_loop.sh
 
 # 4. Results will be saved with percentage in experiment name
 # - checkpoints_data_splitted/l2_baseline_14classes_0_1percent_TIMESTAMP/
