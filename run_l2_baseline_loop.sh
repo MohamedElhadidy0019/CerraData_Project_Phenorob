@@ -8,7 +8,7 @@ echo "Starting at: $(date)"
 
 # Define percentages to test
 # PERCENTAGES="0.5 1 2.5 3.5 5 10 25 50"
-PERCENTAGES="0.5 2.5 3.5"
+PERCENTAGES="0.5 1 2.5 3.5"
 
 # Early stopping patience
 PATIENCE=30

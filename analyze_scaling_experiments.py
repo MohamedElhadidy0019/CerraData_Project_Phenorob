@@ -114,6 +114,7 @@ def collect_all_metrics(base_dir='logs_scaling_experiments'):
     """
     Collect all metrics from all experiments.
     Uses the EXPERIMENTS configuration to determine which experiments to include.
+    Handles missing experiments gracefully.
 
     Returns:
         dict: {method: {percentage: {metric_name: value}}}
@@ -124,26 +125,40 @@ def collect_all_metrics(base_dir='logs_scaling_experiments'):
         method_path = os.path.join(base_dir, method_dir)
 
         if not os.path.exists(method_path):
-            print(f"Warning: {method_path} does not exist")
+            print(f"⚠ Warning: Method directory '{method_path}' does not exist - skipping {method_name}")
             continue
 
-        # Get all experiment directories
-        exp_dirs = [d for d in os.listdir(method_path)
-                   if os.path.isdir(os.path.join(method_path, d)) and not d.endswith('.md')]
+        try:
+            # Get all experiment directories
+            exp_dirs = [d for d in os.listdir(method_path)
+                       if os.path.isdir(os.path.join(method_path, d)) and not d.endswith('.md')]
 
-        for exp_dir in exp_dirs:
-            percentage = parse_percentage_from_dirname(exp_dir)
-            if percentage is None:
+            if not exp_dirs:
+                print(f"⚠ Warning: No experiment directories found in {method_path}")
                 continue
 
-            log_path = os.path.join(method_path, exp_dir)
-            metrics = extract_metrics_from_tensorboard(log_path)
+            for exp_dir in exp_dirs:
+                percentage = parse_percentage_from_dirname(exp_dir)
+                if percentage is None:
+                    continue
 
-            if metrics:
-                results[method_name][percentage] = metrics
-                print(f"✓ {method_name} @ {percentage}%: F1-macro={metrics.get('test_f1_macro', 'N/A'):.4f}")
-            else:
-                print(f"✗ {method_name} @ {percentage}%: No metrics found")
+                log_path = os.path.join(method_path, exp_dir)
+
+                try:
+                    metrics = extract_metrics_from_tensorboard(log_path)
+
+                    if metrics:
+                        results[method_name][percentage] = metrics
+                        print(f"✓ {method_name} @ {percentage}%: F1-macro={metrics.get('test_f1_macro', 'N/A'):.4f}")
+                    else:
+                        print(f"✗ {method_name} @ {percentage}%: No metrics found")
+                except Exception as e:
+                    print(f"✗ {method_name} @ {percentage}%: Error reading metrics - {str(e)}")
+                    continue
+
+        except Exception as e:
+            print(f"⚠ Error processing {method_name}: {str(e)}")
+            continue
 
     return results
 
@@ -151,24 +166,32 @@ def collect_all_metrics(base_dir='logs_scaling_experiments'):
 def plot_individual_method(method_name, data, metric='test_f1_macro', output_dir='analysis_results'):
     """
     Create a plot for a single method showing percentage vs metric.
+    Handles missing data points gracefully.
     """
     if not data:
-        print(f"No data for {method_name}")
+        print(f"⚠ No data for {method_name}")
         return
 
     # Sort by percentage
     percentages = sorted(data.keys())
     values = [data[pct].get(metric, np.nan) for pct in percentages]
 
+    # Filter out NaN values
+    valid_data = [(p, v) for p, v in zip(percentages, values) if not np.isnan(v)]
+    if not valid_data:
+        print(f"⚠ No valid data for {method_name} - {metric}")
+        return
+
+    valid_percentages, valid_values = zip(*valid_data)
+
     # Create plot
     plt.figure(figsize=(10, 6))
-    plt.plot(percentages, values, 'o-', linewidth=2, markersize=8, label=method_name)
+    plt.plot(valid_percentages, valid_values, 'o-', linewidth=2, markersize=8, label=method_name)
 
     # Add value labels on points
-    for pct, val in zip(percentages, values):
-        if not np.isnan(val):
-            plt.annotate(f'{val:.3f}', (pct, val), textcoords="offset points",
-                        xytext=(0,10), ha='center', fontsize=9)
+    for pct, val in zip(valid_percentages, valid_values):
+        plt.annotate(f'{val:.3f}', (pct, val), textcoords="offset points",
+                    xytext=(0,10), ha='center', fontsize=9)
 
     plt.xlabel('Data Percentage (%)', fontsize=14, fontweight='bold')
     plt.ylabel(metric.replace('_', ' ').title(), fontsize=14, fontweight='bold')
@@ -179,11 +202,11 @@ def plot_individual_method(method_name, data, metric='test_f1_macro', output_dir
 
     # Use log scale for x-axis to better show low percentages
     plt.xscale('log')
-    plt.xticks(percentages, [f'{p}%' for p in percentages], rotation=45)
+    plt.xticks(valid_percentages, [f'{p}%' for p in valid_percentages], rotation=45)
 
     # Save plot
     os.makedirs(output_dir, exist_ok=True)
-    safe_method_name = method_name.replace(' ', '_').replace('(', '').replace(')', '').replace('→', 'to')
+    safe_method_name = method_name.replace(' ', '_').replace('(', '').replace(')', '').replace('→', 'to').replace('=', '')
     filename = f'{safe_method_name}_{metric}.png'
     filepath = os.path.join(output_dir, filename)
     plt.tight_layout()
@@ -195,35 +218,54 @@ def plot_individual_method(method_name, data, metric='test_f1_macro', output_dir
 def plot_combined_comparison(all_results, metric='test_f1_macro', output_dir='analysis_results'):
     """
     Create a combined plot comparing all methods.
+    Handles missing data points gracefully.
     """
     plt.figure(figsize=(12, 7))
 
     colors = {
         'Baseline (Random Init)': '#e74c3c',
+        'Baseline (lr=1e-4)': '#e67e22',
         'Hierarchical (L1→L2)': '#3498db',
         'Self-Supervised (MoCo→L2)': '#2ecc71'
     }
 
     markers = {
         'Baseline (Random Init)': 'o',
+        'Baseline (lr=1e-4)': 'D',
         'Hierarchical (L1→L2)': 's',
         'Self-Supervised (MoCo→L2)': '^'
     }
 
+    plotted_any = False
     for method_name, data in all_results.items():
         if not data:
+            print(f"⚠ No data for {method_name} in combined plot")
             continue
 
         percentages = sorted(data.keys())
         values = [data[pct].get(metric, np.nan) for pct in percentages]
 
-        plt.plot(percentages, values,
+        # Filter out NaN values for plotting
+        valid_data = [(p, v) for p, v in zip(percentages, values) if not np.isnan(v)]
+        if not valid_data:
+            print(f"⚠ No valid data for {method_name} in combined plot")
+            continue
+
+        valid_percentages, valid_values = zip(*valid_data)
+
+        plt.plot(valid_percentages, valid_values,
                 marker=markers.get(method_name, 'o'),
                 linewidth=2.5,
                 markersize=10,
                 label=method_name,
                 color=colors.get(method_name),
                 alpha=0.8)
+        plotted_any = True
+
+    if not plotted_any:
+        print(f"⚠ No data to plot for {metric}")
+        plt.close()
+        return
 
     plt.xlabel('Data Percentage (%)', fontsize=14, fontweight='bold')
     plt.ylabel(metric.replace('_', ' ').title(), fontsize=14, fontweight='bold')
@@ -237,7 +279,8 @@ def plot_combined_comparison(all_results, metric='test_f1_macro', output_dir='an
 
     # Get all unique percentages across all methods
     all_percentages = sorted(set(pct for data in all_results.values() for pct in data.keys()))
-    plt.xticks(all_percentages, [f'{p}%' for p in all_percentages], rotation=45)
+    if all_percentages:
+        plt.xticks(all_percentages, [f'{p}%' for p in all_percentages], rotation=45)
 
     # Save plot
     os.makedirs(output_dir, exist_ok=True)
@@ -336,8 +379,18 @@ def main():
     print()
 
     if not all_results:
-        print("ERROR: No results collected. Check tensorboard logs.")
+        print("ERROR: No results collected. Check tensorboard logs and experiment directories.")
         return
+
+    # Print summary of what was found
+    print("\n" + "="*80)
+    print("SUMMARY OF COLLECTED DATA")
+    print("="*80)
+    for method_name, data in all_results.items():
+        percentages = sorted(data.keys())
+        print(f"{method_name}: {len(percentages)} data points")
+        print(f"  Percentages: {', '.join([f'{p}%' for p in percentages])}")
+    print("="*80 + "\n")
 
     # Create output directory
     output_dir = 'analysis_results'
@@ -347,8 +400,11 @@ def main():
     print("\nStep 2: Generating individual method plots...")
     print("-"*80)
     for method_name, data in all_results.items():
-        plot_individual_method(method_name, data, metric='test_f1_macro', output_dir=output_dir)
-        plot_individual_method(method_name, data, metric='test_f1_weighted', output_dir=output_dir)
+        if data:  # Only plot if there's data
+            plot_individual_method(method_name, data, metric='test_f1_macro', output_dir=output_dir)
+            plot_individual_method(method_name, data, metric='test_f1_weighted', output_dir=output_dir)
+        else:
+            print(f"⚠ Skipping {method_name}: No data available")
     print()
 
     # Generate combined comparison plots
@@ -368,20 +424,8 @@ def main():
     print("="*80)
     print(f"ANALYSIS COMPLETE! Results saved to: {output_dir}/")
     print("="*80)
-    print("\nGenerated files:")
-    print("  Individual plots:")
-    print("    - Baseline_(Random_Init)_test_f1_macro.png")
-    print("    - Baseline_(Random_Init)_test_f1_weighted.png")
-    print("    - Hierarchical_(L1toL2)_test_f1_macro.png")
-    print("    - Hierarchical_(L1toL2)_test_f1_weighted.png")
-    print("    - Self-Supervised_(MoCotoL2)_test_f1_macro.png")
-    print("    - Self-Supervised_(MoCotoL2)_test_f1_weighted.png")
-    print("  Combined plots:")
-    print("    - combined_comparison_test_f1_macro.png")
-    print("    - combined_comparison_test_f1_weighted.png")
-    print("  Tables:")
-    print("    - table_test_f1_macro.csv / .md")
-    print("    - table_test_f1_weighted.csv / .md")
+    print("\nNote: Generated files depend on available experiments.")
+    print("Check the summary above to see which data points were found.")
     print()
 
 

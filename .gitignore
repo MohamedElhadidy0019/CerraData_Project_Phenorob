@@ -3,6 +3,7 @@ kaggle_temp/
 # whats in checkpoints
 checkpoints/
 cerradata_splitted/
+CerraData-4MM/dataset_splitted/
 logs/
 *.pyc
 __pycache__/

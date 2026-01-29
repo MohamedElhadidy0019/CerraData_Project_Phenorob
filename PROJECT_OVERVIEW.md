@@ -347,7 +347,7 @@ sbatch run_l2_from_supervision_loop.sh  # Self-supervised
 
 **Automated Analysis Script**: `analyze_scaling_experiments.py`
 
-This comprehensive script extracts metrics from tensorboard logs and generates publication-ready visualizations and tables.
+This comprehensive script extracts metrics from tensorboard logs and generates publication-ready visualizations and tables. **Handles missing experiments gracefully** - you can run it even if some data percentages are incomplete or missing.
 
 #### Configuration:
 
@@ -373,6 +373,14 @@ EXPERIMENTS = {
 }
 ```
 
+#### Robustness Features:
+
+- **Missing Experiments**: Continues processing if some data percentages don't exist
+- **Partial Data**: Plots only available data points (e.g., 10%, 50% but not 0.5%, 1%)
+- **Error Handling**: Gracefully handles corrupt or incomplete tensorboard logs
+- **Summary Report**: Shows exactly which data points were found for each method
+- **Smart Filtering**: Automatically filters out NaN values before plotting
+
 #### What It Does:
 
 1. **Extracts Metrics from TensorBoard Logs**:
@@ -380,6 +388,7 @@ EXPERIMENTS = {
    - Extracts `test_f1_macro` and `test_f1_weighted` for enabled experiments
    - Automatically parses data percentages from directory names (handles lr specifications)
    - Supports up to 4 methods: Baseline (1e-3), Baseline (1e-4), Hierarchical, Self-Supervised
+   - **Skips missing experiments** with clear warning messages (⚠ symbols)
 
 2. **Generates Individual Method Plots** (up to 8 plots):
    - One plot per enabled method
@@ -387,11 +396,13 @@ EXPERIMENTS = {
    - Value labels on each data point
    - Log-scale x-axis for better visualization of low percentages
    - Generated for both `test_f1_macro` and `test_f1_weighted`
+   - **Only plots available data points** - handles gaps in data gracefully
 
 3. **Generates Combined Comparison Plots** (2 plots):
    - All enabled methods on the same graph for direct comparison
-   - Color-coded with distinct markers
+   - Color-coded with distinct markers (circles, diamonds, squares, triangles)
    - One for `test_f1_macro` (primary metric), one for `test_f1_weighted`
+   - **Each method plots independently** - different methods can have different data points
 
 4. **Creates Comparison Tables** (4 files):
    - CSV format (`.csv`) for data analysis and further processing
@@ -399,14 +410,41 @@ EXPERIMENTS = {
    - One pair for `test_f1_macro`, one pair for `test_f1_weighted`
    - Tables show all percentages as rows and enabled methods as columns
 
+4. **Prints Summary Report**:
+   - Shows number of data points found per method
+   - Lists exact percentages available for each method
+   - Helps identify which experiments are complete or missing
+
 #### How to Run:
 
 ```bash
 # Install dependencies (if needed)
 pip install tensorboard pandas matplotlib seaborn numpy
 
-# Run the analysis
+# Run the analysis (works even with incomplete data)
 python analyze_scaling_experiments.py
+```
+
+**Note**: The script will process whatever experiments exist and skip missing ones. You don't need to wait for all experiments to complete before running the analysis.
+
+#### Example Output:
+
+```
+Step 1: Collecting metrics from tensorboard logs...
+✓ Baseline (lr=1e-4) @ 10%: F1-macro=0.4523
+✗ Baseline (lr=1e-4) @ 0.5%: No metrics found
+✓ Baseline (lr=1e-4) @ 50%: F1-macro=0.5821
+
+================================================================================
+SUMMARY OF COLLECTED DATA
+================================================================================
+Baseline (lr=1e-4): 2 data points
+  Percentages: 10%, 50%
+Hierarchical (L1→L2): 3 data points
+  Percentages: 1%, 5%, 25%
+Self-Supervised (MoCo→L2): 4 data points
+  Percentages: 0.5%, 5%, 10%, 50%
+================================================================================
 ```
 
 #### Output Location:
@@ -423,6 +461,8 @@ All results saved to `analysis_results/` directory:
 - **Tables**: 4 files (include only enabled experiments)
   - `table_test_f1_macro.csv` / `table_test_f1_macro.md`
   - `table_test_f1_weighted.csv` / `table_test_f1_weighted.md`
+
+**Note**: Plots and tables will show only available data points. Missing experiments will simply be gaps in the visualization.
 
 #### Metrics Explained:
 
