@@ -11,6 +11,12 @@ from torch.optim import Adam
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 import numpy as np
 from sklearn.metrics import f1_score, jaccard_score
+import sys
+import os
+
+# Import DiceLoss from CerraData-4MM
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'CerraData-4MM', 'CerraData-4MM Experiments', 'util'))
+from utils import DiceLoss
 
 class UNetSegmentation(pl.LightningModule):
     """U-Net model for semantic segmentation using PyTorch Lightning"""
@@ -45,10 +51,11 @@ class UNetSegmentation(pl.LightningModule):
             activation=None  # We'll apply softmax in forward pass
         )
         
-        # Loss function with class weights if provided
+        # Loss functions from CerraData-4MM: 0.4*CE + 0.6*Dice
         if class_weights is not None:
             class_weights = torch.tensor(class_weights, dtype=torch.float32)
-        self.criterion = nn.CrossEntropyLoss(weight=class_weights)
+        self.ce_loss = nn.CrossEntropyLoss(weight=class_weights)
+        self.dice_loss = DiceLoss(num_classes)
         
         # Metrics storage
         self.training_step_outputs = []
@@ -64,9 +71,9 @@ class UNetSegmentation(pl.LightningModule):
         """Training step"""
         images, labels = batch
         logits = self(images)
-        
-        # Compute loss
-        loss = self.criterion(logits, labels)
+
+        # Compute loss (CerraData-4MM style: 0.4*CE + 0.6*Dice)
+        loss = 0.4 * self.ce_loss(logits, labels.long()) + 0.6 * self.dice_loss(logits, labels.float(), softmax=True)
         
         # Compute metrics
         preds = torch.argmax(logits, dim=1)
@@ -89,9 +96,9 @@ class UNetSegmentation(pl.LightningModule):
         """Validation step"""
         images, labels = batch
         logits = self(images)
-        
-        # Compute loss
-        loss = self.criterion(logits, labels)
+
+        # Compute loss (CerraData-4MM style: 0.4*CE + 0.6*Dice)
+        loss = 0.4 * self.ce_loss(logits, labels.long()) + 0.6 * self.dice_loss(logits, labels.float(), softmax=True)
         
         # Compute metrics
         preds = torch.argmax(logits, dim=1)
@@ -114,9 +121,9 @@ class UNetSegmentation(pl.LightningModule):
         """Test step"""
         images, labels = batch
         logits = self(images)
-        
-        # Compute loss
-        loss = self.criterion(logits, labels)
+
+        # Compute loss (CerraData-4MM style: 0.4*CE + 0.6*Dice)
+        loss = 0.4 * self.ce_loss(logits, labels.long()) + 0.6 * self.dice_loss(logits, labels.float(), softmax=True)
         
         # Compute metrics
         preds = torch.argmax(logits, dim=1)
