@@ -207,6 +207,13 @@ def train_baseline(
     return model, trainer, checkpoint_callback.best_model_path
 
 def main():
+    # Fix CUDA multiprocessing for GPU data loading
+    import torch.multiprocessing as mp
+    try:
+        mp.set_start_method('spawn', force=True)
+    except RuntimeError:
+        pass  # Already set
+
     parser = argparse.ArgumentParser(description='Train baseline U-Net model')
     parser.add_argument('--data_dir', type=str, default='./data',
                         help='Path to dataset directory')
