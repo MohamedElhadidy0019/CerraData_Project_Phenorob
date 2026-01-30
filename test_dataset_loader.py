@@ -11,9 +11,8 @@ import torch
 DATA_DIR = '/home/s52melba/CerraData_Project_Phenorob/CerraData-4MM/dataset_splitted'
 
 # Import MMDataset from CerraData-4MM
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'CerraData-4MM', 'CerraData-4MM Experiments', 'util'))
-from dataset_loader_7 import MMDataset as MMDataset_L1  # L1 (7 classes)
-from dataset_loader import MMDataset as MMDataset_L2  # L2 (14 classes)
+from dataset_loader_official.dataset_loader_7 import MMDataset as MMDataset_L1  # L1 (7 classes)
+from dataset_loader_official.dataset_loader import MMDataset as MMDataset_L2  # L2 (14 classes)
 
 def test_l1_dataset():
     """Load and test MMDataset for L1 (7 classes)"""
