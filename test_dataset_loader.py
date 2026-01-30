@@ -72,12 +72,15 @@ def test_l1_dataset():
     random_indices = random.sample(range(len(train_dataset)), min(10, len(train_dataset)))
 
     all_classes_found = set()
+    mask_shape = None
     for i, idx in enumerate(random_indices, 1):
         _, mask, _ = train_dataset[idx]
+        mask_shape = mask.shape if mask_shape is None else mask_shape
         unique_classes = torch.unique(mask).cpu().numpy()
         all_classes_found.update(unique_classes)
         print(f"Sample {i} (index {idx}): classes {unique_classes.tolist()}")
 
+    print(f"\nAll masks have shape: {mask_shape}")
     print(f"\nAll unique classes found across 10 samples: {sorted(all_classes_found)}")
     print(f"Expected range for L1: 0-6 (7 classes)")
 

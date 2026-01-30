@@ -10,8 +10,8 @@ python train_l1_baseline.py \
     --data_dir /home/s52melba/CerraData_Project_Phenorob/CerraData-4MM/dataset_splitted \
     --experiment_name "l1_pretrain_7classes_multimodal" \
     --gpu_ids "0" \
-    --batch_size 100 \
-    --num_epochs 200 \
+    --batch_size 256 \
+    --num_epochs 500 \
     --learning_rate 1e-3 \
     --checkpoint_dir ./CerraData-4MM/experiment_results/weights \
     --log_dir ./CerraData-4MM/experiment_results/logs \
