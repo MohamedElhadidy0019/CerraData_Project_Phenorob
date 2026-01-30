@@ -17,3 +17,5 @@ events.*
 
 checkpoints_data_splitted/moco_pretrain_resnet34_20251215_185057/training_summary.txt
 *.txt
+.vscode/settings.json
+

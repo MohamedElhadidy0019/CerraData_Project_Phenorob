@@ -90,7 +90,7 @@ class MMDataset(Dataset):
         self.device = gpu
 
         # Optical data
-        self.opt_path = os.path.join(dir_path, "opt_images")
+        self.opt_path = os.path.join(dir_path, "msi_images")
         self.opt_lists = sorted(glob.glob(os.path.join(self.opt_path, "*.tif")))
         # SAR data
         self.sar_path = os.path.join(dir_path, "sar_images")
