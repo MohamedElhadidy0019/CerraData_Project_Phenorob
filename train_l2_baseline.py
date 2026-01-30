@@ -4,6 +4,12 @@ Train baseline U-Net model on L2 (14-class) segmentation using CerraData-4MM MMD
 """
 import os
 import sys
+import warnings
+
+# Suppress warnings
+warnings.filterwarnings('ignore', category=FutureWarning, module='osgeo')
+warnings.filterwarnings('ignore', message='Can\'t initialize NVML')
+
 import torch
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
@@ -22,7 +28,7 @@ def train_baseline(
     data_dir,
     batch_size=16,
     num_epochs=100,
-    learning_rate=1e-3,
+    learning_rate=1e-4,
     num_workers=4,
     gpu_ids=None,
     checkpoint_dir="./checkpoints",
@@ -94,9 +100,12 @@ def train_baseline(
     print(f"  Test: {len(test_dataset)} samples (always 100%)")
 
     # Create DataLoaders
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
-    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers,
+                              persistent_workers=True if num_workers > 0 else False)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers,
+                            persistent_workers=True if num_workers > 0 else False)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers,
+                             persistent_workers=True if num_workers > 0 else False)
 
     print(f"\nDataLoader batches:")
     print(f"  Train: {len(train_loader)} batches")
@@ -221,7 +230,7 @@ def main():
                         help='Batch size for training')
     parser.add_argument('--num_epochs', type=int, default=100,
                         help='Maximum number of epochs')
-    parser.add_argument('--learning_rate', type=float, default=1e-3,
+    parser.add_argument('--learning_rate', type=float, default=1e-4,
                         help='Learning rate')
     parser.add_argument('--num_workers', type=int, default=4,
                         help='Number of data loader workers')

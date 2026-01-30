@@ -40,7 +40,7 @@ for PCT in $PERCENTAGES; do
         --gpu_ids "0" \
         --batch_size 100 \
         --num_epochs 300 \
-        --learning_rate 1e-3 \
+        --learning_rate 1e-4 \
         --checkpoint_dir "$CHECKPOINT_BASE" \
         --log_dir "$LOG_BASE" \
         --data_percentage $PCT \

@@ -150,7 +150,7 @@ class MMDataset(Dataset):
 
         stacked_img = stacked_img.to(self.device)
         semantic_mask = semantic_mask.to(self.device)
-        edge_mask = torch.tensor(edge_mask, dtype=torch.float32).to(self.device)
+        edge_mask = edge_mask.clone().detach().to(torch.float32).to(self.device)
 
         return stacked_img, semantic_mask, edge_mask
 

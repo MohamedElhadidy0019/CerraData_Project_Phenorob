@@ -12,7 +12,7 @@ python train_l1_baseline.py \
     --gpu_ids "0" \
     --batch_size 256 \
     --num_epochs 500 \
-    --learning_rate 1e-3 \
+    --learning_rate 1e-4 \
     --checkpoint_dir ./CerraData-4MM/experiment_results/weights \
     --log_dir ./CerraData-4MM/experiment_results/logs \
     --patience 30 \
