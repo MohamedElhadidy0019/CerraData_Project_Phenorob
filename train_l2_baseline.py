@@ -13,8 +13,8 @@ from datetime import datetime
 from torch.utils.data import DataLoader, Subset
 
 # Import MMDataset from CerraData-4MM (Multimodal: MSI+SAR, 14 channels, L2 classes)
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'CerraData-4MM', 'CerraData-4MM Experiments', 'util'))
-from dataset_loader import MMDataset
+from dataset_loader_official.dataset_loader import MMDataset
+
 
 from model import create_model
 
