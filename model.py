@@ -59,7 +59,7 @@ class UNetSegmentation(pl.LightningModule):
     
     def training_step(self, batch, batch_idx):
         """Training step"""
-        images, labels = batch
+        images, labels, _ = batch  # Dataset returns (stacked_img, semantic_mask, edge_mask)
         logits = self(images)
 
         loss = self.criterion(logits, labels.long()) 
@@ -83,7 +83,7 @@ class UNetSegmentation(pl.LightningModule):
     
     def validation_step(self, batch, batch_idx):
         """Validation step"""
-        images, labels = batch
+        images, labels, _ = batch  # Dataset returns (stacked_img, semantic_mask, edge_mask)
         logits = self(images)
 
         loss = self.criterion(logits, labels.long()) 
@@ -107,7 +107,7 @@ class UNetSegmentation(pl.LightningModule):
     
     def test_step(self, batch, batch_idx):
         """Test step"""
-        images, labels = batch
+        images, labels, _ = batch  # Dataset returns (stacked_img, semantic_mask, edge_mask)
         logits = self(images)
 
         loss = self.criterion(logits, labels.long()) 
