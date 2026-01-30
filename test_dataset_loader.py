@@ -65,6 +65,22 @@ def test_l1_dataset():
     print(f"Semantic mask: {semantic_mask.device}")
     print(f"Edge mask:     {edge_mask.device}")
 
+    # Random sampling verification
+    print("\n=== Random Sample Verification (10 samples) ===")
+    import random
+    random.seed(42)
+    random_indices = random.sample(range(len(train_dataset)), min(10, len(train_dataset)))
+
+    all_classes_found = set()
+    for i, idx in enumerate(random_indices, 1):
+        _, mask, _ = train_dataset[idx]
+        unique_classes = torch.unique(mask).cpu().numpy()
+        all_classes_found.update(unique_classes)
+        print(f"Sample {i} (index {idx}): classes {unique_classes.tolist()}")
+
+    print(f"\nAll unique classes found across 10 samples: {sorted(all_classes_found)}")
+    print(f"Expected range for L1: 0-6 (7 classes)")
+
     print("\n=== L1 Test Completed Successfully! ===")
 
 def test_l2_dataset():
@@ -117,6 +133,22 @@ def test_l2_dataset():
     print(f"Stacked image: {stacked_img.device}")
     print(f"Semantic mask: {semantic_mask.device}")
     print(f"Edge mask:     {edge_mask.device}")
+
+    # Random sampling verification
+    print("\n=== Random Sample Verification (10 samples) ===")
+    import random
+    random.seed(42)
+    random_indices = random.sample(range(len(train_dataset)), min(10, len(train_dataset)))
+
+    all_classes_found = set()
+    for i, idx in enumerate(random_indices, 1):
+        _, mask, _ = train_dataset[idx]
+        unique_classes = torch.unique(mask).cpu().numpy()
+        all_classes_found.update(unique_classes)
+        print(f"Sample {i} (index {idx}): classes {unique_classes.tolist()}")
+
+    print(f"\nAll unique classes found across 10 samples: {sorted(all_classes_found)}")
+    print(f"Expected range for L2: 0-13 (14 classes)")
 
     print("\n=== L2 Test Completed Successfully! ===")
 
