@@ -6,15 +6,16 @@
 echo "=== L1 PRETRAINING EXPERIMENT ==="
 echo "Starting at: $(date)"
 
-python train_baseline.py \
-    --data_dir /home/s52melba/CerraData_Project_Phenorob/cerradata_splitted \
-    --label_level L1 \
-    --experiment_name "l1_pretrain_7classes_splitted" \
+python train_l1_baseline.py \
+    --data_dir /home/s52melba/CerraData_Project_Phenorob/CerraData-4MM/dataset_splitted \
+    --experiment_name "l1_pretrain_7classes_multimodal" \
     --gpu_ids "0" \
     --batch_size 100 \
-    --num_epochs 100 \
+    --num_epochs 200 \
     --learning_rate 1e-3 \
-    --checkpoint_dir ./checkpoints_data_splitted \
-    --log_dir ./logs_splitted
+    --checkpoint_dir ./CerraData-4MM/experiment_results/weights \
+    --log_dir ./CerraData-4MM/experiment_results/logs \
+    --patience 30 \
+    --seed 42
 
 echo "Completed at: $(date)"

@@ -1,16 +1,21 @@
 #!/usr/bin/env python3
 """
-Train baseline U-Net model on 14-class segmentation with random initialization
+Train baseline U-Net model on L2 (14-class) segmentation using CerraData-4MM MMDataset
 """
 import os
+import sys
 import torch
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
 from pytorch_lightning.loggers import TensorBoardLogger
 import argparse
 from datetime import datetime
+from torch.utils.data import DataLoader, Subset
 
-from dataset import create_data_loaders
+# Import MMDataset from CerraData-4MM (Multimodal: MSI+SAR, 14 channels, L2 classes)
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'CerraData-4MM', 'CerraData-4MM Experiments', 'util'))
+from dataset_loader import MMDataset
+
 from model import create_model
 
 def train_baseline(
@@ -25,7 +30,8 @@ def train_baseline(
     label_level="L2",
     experiment_name=None,
     data_percentage=100,
-    patience=20
+    patience=20,
+    seed=42
 ):
     """Train baseline model with random initialization on L1 (7-class) or L2 (14-class) segmentation"""
     
@@ -52,25 +58,56 @@ def train_baseline(
     print(f"Devices: {devices}")
     print(f"Strategy: {strategy}")
     
-    # Create data loaders
-    print(f"\nCreating data loaders for {label_level} labels...")
-    train_loader, val_loader, test_loader = create_data_loaders(
-        data_dir=data_dir,
-        batch_size=batch_size,
-        num_workers=num_workers,
-        label_level=label_level,
-        data_percentage=data_percentage
-    )
-    
-    print(f"Train batches: {len(train_loader)}")
-    print(f"Val batches: {len(val_loader)}")
-    print(f"Test batches: {len(test_loader)}")
-    
+    # Create data loaders using CerraData-4MM's MMDataset (MSI+SAR, 14 channels)
+    print(f"\nLoading CerraData-4MM datasets (L2: 14 classes, Multimodal)...")
+
+    # Determine device
+    device = 'cuda:0' if use_gpu and torch.cuda.is_available() else 'cpu'
+
+    # Load full datasets from train/val/test folders
+    train_dataset_full = MMDataset(dir_path=os.path.join(data_dir, 'train'), gpu=device, norm='none')
+    val_dataset_full = MMDataset(dir_path=os.path.join(data_dir, 'val'), gpu=device, norm='none')
+    test_dataset = MMDataset(dir_path=os.path.join(data_dir, 'test'), gpu=device, norm='none')
+
+    # Apply data percentage to train and val (with seed for reproducibility)
+    if data_percentage < 100:
+        # Train subset
+        train_size = max(10, int(round(len(train_dataset_full) * data_percentage / 100)))
+        train_indices = torch.randperm(len(train_dataset_full), generator=torch.Generator().manual_seed(seed))[:train_size]
+        train_dataset = Subset(train_dataset_full, train_indices.tolist())
+
+        # Val subset
+        val_size = max(10, int(round(len(val_dataset_full) * data_percentage / 100)))
+        val_indices = torch.randperm(len(val_dataset_full), generator=torch.Generator().manual_seed(seed))[:val_size]
+        val_dataset = Subset(val_dataset_full, val_indices.tolist())
+
+        print(f"Using {data_percentage}% of data (seed={seed}):")
+        print(f"  Train: {len(train_dataset)} / {len(train_dataset_full)} samples")
+        print(f"  Val: {len(val_dataset)} / {len(val_dataset_full)} samples")
+    else:
+        train_dataset = train_dataset_full
+        val_dataset = val_dataset_full
+        print(f"Using 100% of data:")
+        print(f"  Train: {len(train_dataset)} samples")
+        print(f"  Val: {len(val_dataset)} samples")
+
+    print(f"  Test: {len(test_dataset)} samples (always 100%)")
+
+    # Create DataLoaders
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+
+    print(f"\nDataLoader batches:")
+    print(f"  Train: {len(train_loader)} batches")
+    print(f"  Val: {len(val_loader)} batches")
+    print(f"  Test: {len(test_loader)} batches")
+
     # Create model with random initialization
-    num_classes = 14 if label_level == 'L2' else 7
-    print(f"\nCreating U-Net model for {label_level} ({num_classes} classes)...")
+    num_classes = 14  # L2 baseline
+    print(f"\nCreating U-Net model for L2 ({num_classes} classes, 14 input channels)...")
     model = create_model(
-        in_channels=12,
+        in_channels=14,  # Multimodal: 12 MSI + 2 SAR
         num_classes=num_classes,
         encoder_name="resnet34",
         learning_rate=learning_rate
@@ -86,7 +123,7 @@ def train_baseline(
     # Setup callbacks
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     if experiment_name is None:
-        experiment_name = f"baseline_{label_level.lower()}_{num_classes}class_{timestamp}"
+        experiment_name = f"baseline_l2_14class_{timestamp}"
     else:
         experiment_name = f"{experiment_name}_{timestamp}"
     
@@ -148,8 +185,10 @@ def train_baseline(
         f.write(f"================================\n\n")
         f.write(f"Experiment: {experiment_name}\n")
         f.write(f"Model: U-Net with ResNet34 encoder (random initialization)\n")
-        f.write(f"Task: {num_classes}-class semantic segmentation ({label_level} labels)\n")
-        f.write(f"Dataset: CerraData-4MM\n")
+        f.write(f"Task: {num_classes}-class semantic segmentation (L2 labels)\n")
+        f.write(f"Dataset: CerraData-4MM Multimodal (MSI+SAR, 14 channels)\n")
+        f.write(f"Data percentage: {data_percentage}% (seed={seed})\n")
+        f.write(f"Loss: CrossEntropyLoss (no weights)\n")
         f.write(f"Training samples: {len(train_loader.dataset)}\n")
         f.write(f"Validation samples: {len(val_loader.dataset)}\n")
         f.write(f"Test samples: {len(test_loader.dataset)}\n")
@@ -185,19 +224,21 @@ def main():
                         help='Directory to save checkpoints')
     parser.add_argument('--log_dir', type=str, default='./logs',
                         help='Directory to save logs')
-    parser.add_argument('--label_level', type=str, default='L2', choices=['L1', 'L2'],
-                        help='Label level: L1 (7 classes) or L2 (14 classes)')
+    parser.add_argument('--label_level', type=str, default='L2', choices=['L2'],
+                        help='Label level: L2 (14 classes) - fixed for this script')
     parser.add_argument('--experiment_name', type=str, default=None,
                         help='Custom experiment name (timestamp will be appended)')
     parser.add_argument('--data_percentage', type=float, default=100,
                         help='Percentage of data to use (0.1-100, accepts decimals)')
     parser.add_argument('--patience', type=int, default=20,
                         help='Early stopping patience (number of epochs)')
+    parser.add_argument('--seed', type=int, default=42,
+                        help='Random seed for data subset selection (default: 42)')
 
     args = parser.parse_args()
     
     # Set seeds for reproducibility
-    pl.seed_everything(42, workers=True)
+    pl.seed_everything(args.seed, workers=True)
     
     # Check if data directory exists
     if not os.path.exists(args.data_dir):
@@ -223,7 +264,8 @@ def main():
         label_level=args.label_level,
         experiment_name=args.experiment_name,
         data_percentage=args.data_percentage,
-        patience=args.patience
+        patience=args.patience,
+        seed=args.seed
     )
 
 if __name__ == "__main__":

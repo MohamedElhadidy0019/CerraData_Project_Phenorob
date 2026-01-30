@@ -14,8 +14,8 @@ PERCENTAGES="0.5 1 2.5 3.5"
 PATIENCE=30
 
 # Organized directories for scaling experiments
-LOG_BASE="./logs_scaling_experiments/baseline"
-CHECKPOINT_BASE="./checkpoints_scaling_experiments/baseline"
+LOG_BASE="./CerraData-4MM/experiment_results/logs/baseline"
+CHECKPOINT_BASE="./CerraData-4MM/experiment_results/weights/baseline"
 
 # Create directories if they don't exist
 mkdir -p "$LOG_BASE"
@@ -33,10 +33,10 @@ for PCT in $PERCENTAGES; do
     echo "Running L2 Baseline with ${PCT}% data"
     echo "========================================="
 
-    python train_baseline.py \
+    python train_l2_baseline.py \
         --data_dir /home/s52melba/CerraData_Project_Phenorob/cerradata_splitted \
         --label_level L2 \
-        --experiment_name "l2_baseline_14classes_${PCT_NAME}percent" \
+        --experiment_name "l2_baseline_14classes_multimodal_${PCT_NAME}percent" \
         --gpu_ids "0" \
         --batch_size 100 \
         --num_epochs 300 \
@@ -44,7 +44,8 @@ for PCT in $PERCENTAGES; do
         --checkpoint_dir "$CHECKPOINT_BASE" \
         --log_dir "$LOG_BASE" \
         --data_percentage $PCT \
-        --patience $PATIENCE
+        --patience $PATIENCE \
+        --seed 42
 
     echo "Completed ${PCT}% at: $(date)"
 done
