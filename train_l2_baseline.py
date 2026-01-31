@@ -39,7 +39,7 @@ def train_baseline(
     patience=20,
     seed=42
 ):
-    """Train baseline model with random initialization on L1 (7-class) or L2 (14-class) segmentation"""
+    """Train baseline model with random initialization on L2 (14-class) segmentation"""
     
     print("=== Training Baseline Model (Random Initialization) ===")
     print(f"Data directory: {data_dir}")
@@ -67,13 +67,11 @@ def train_baseline(
     # Create data loaders using CerraData-4MM's MMDataset (MSI+SAR, 14 channels)
     print(f"\nLoading CerraData-4MM datasets (L2: 14 classes, Multimodal)...")
 
-    # Determine device
-    device = 'cuda:0' if use_gpu and torch.cuda.is_available() else 'cpu'
-
-    # Load full datasets from train/val/test folders
-    train_dataset_full = MMDataset(dir_path=os.path.join(data_dir, 'train'), gpu=device, norm='none')
-    val_dataset_full = MMDataset(dir_path=os.path.join(data_dir, 'val'), gpu=device, norm='none')
-    test_dataset = MMDataset(dir_path=os.path.join(data_dir, 'test'), gpu=device, norm='none')
+    # Load datasets on CPU (PyTorch Lightning will move to GPU automatically)
+    # This is more efficient than loading to GPU in workers
+    train_dataset_full = MMDataset(dir_path=os.path.join(data_dir, 'train'), gpu='cpu', norm='none')
+    val_dataset_full = MMDataset(dir_path=os.path.join(data_dir, 'val'), gpu='cpu', norm='none')
+    test_dataset = MMDataset(dir_path=os.path.join(data_dir, 'test'), gpu='cpu', norm='none')
 
     # Apply data percentage to train and val (with seed for reproducibility)
     if data_percentage < 100:
@@ -99,13 +97,19 @@ def train_baseline(
 
     print(f"  Test: {len(test_dataset)} samples (always 100%)")
 
-    # Create DataLoaders
+    # Create DataLoaders with optimizations
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers,
-                              persistent_workers=True if num_workers > 0 else False)
+                              persistent_workers=True if num_workers > 0 else False,
+                              pin_memory=True if use_gpu else False,
+                              prefetch_factor=4 if num_workers > 0 else None)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers,
-                            persistent_workers=True if num_workers > 0 else False)
+                            persistent_workers=True if num_workers > 0 else False,
+                            pin_memory=True if use_gpu else False,
+                            prefetch_factor=4 if num_workers > 0 else None)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers,
-                             persistent_workers=True if num_workers > 0 else False)
+                             persistent_workers=True if num_workers > 0 else False,
+                             pin_memory=True if use_gpu else False,
+                             prefetch_factor=4 if num_workers > 0 else None)
 
     print(f"\nDataLoader batches:")
     print(f"  Train: {len(train_loader)} batches")
@@ -216,13 +220,6 @@ def train_baseline(
     return model, trainer, checkpoint_callback.best_model_path
 
 def main():
-    # Fix CUDA multiprocessing for GPU data loading
-    import torch.multiprocessing as mp
-    try:
-        mp.set_start_method('spawn', force=True)
-    except RuntimeError:
-        pass  # Already set
-
     parser = argparse.ArgumentParser(description='Train baseline U-Net model')
     parser.add_argument('--data_dir', type=str, default='./data',
                         help='Path to dataset directory')

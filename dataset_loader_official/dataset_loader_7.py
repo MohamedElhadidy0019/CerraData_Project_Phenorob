@@ -148,9 +148,8 @@ class MMDataset(Dataset):
         # Stack images along the channel dimension
         stacked_img = torch.cat((opt_img, sar_img), dim=0)
 
-        stacked_img = stacked_img.to(self.device)
-        semantic_mask = semantic_mask.to(self.device)
-        edge_mask = edge_mask.clone().detach().to(torch.float32).to(self.device)
+        # Keep on CPU - PyTorch Lightning will move to GPU automatically
+        edge_mask = edge_mask.clone().detach().to(torch.float32)
 
         return stacked_img, semantic_mask, edge_mask
 

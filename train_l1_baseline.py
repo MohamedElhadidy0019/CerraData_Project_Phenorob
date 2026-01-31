@@ -66,25 +66,29 @@ def train_baseline(
     # Create data loaders using CerraData-4MM's MMDataset (MSI+SAR, 14 channels)
     print(f"\nCreating data loaders using CerraData-4MM MMDataset (L1: 7 classes)...")
 
-    # Determine device
-    device = 'cuda:0' if use_gpu and torch.cuda.is_available() else 'cpu'
-
-    # Load datasets from train/val/test folders
-    train_dataset = MMDataset(dir_path=os.path.join(data_dir, 'train'), gpu=device, norm='none')
-    val_dataset = MMDataset(dir_path=os.path.join(data_dir, 'val'), gpu=device, norm='none')
-    test_dataset = MMDataset(dir_path=os.path.join(data_dir, 'test'), gpu=device, norm='none')
+    # Load datasets on CPU (PyTorch Lightning will move to GPU automatically)
+    # This is more efficient than loading to GPU in workers
+    train_dataset = MMDataset(dir_path=os.path.join(data_dir, 'train'), gpu='cpu', norm='none')
+    val_dataset = MMDataset(dir_path=os.path.join(data_dir, 'val'), gpu='cpu', norm='none')
+    test_dataset = MMDataset(dir_path=os.path.join(data_dir, 'test'), gpu='cpu', norm='none')
 
     print(f"Train samples: {len(train_dataset)}")
     print(f"Val samples: {len(val_dataset)}")
     print(f"Test samples: {len(test_dataset)}")
 
-    # Create DataLoaders
+    # Create DataLoaders with optimizations
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers,
-                              persistent_workers=True if num_workers > 0 else False)
+                              persistent_workers=True if num_workers > 0 else False,
+                              pin_memory=True if use_gpu else False,
+                              prefetch_factor=4 if num_workers > 0 else None)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers,
-                            persistent_workers=True if num_workers > 0 else False)
+                            persistent_workers=True if num_workers > 0 else False,
+                            pin_memory=True if use_gpu else False,
+                            prefetch_factor=4 if num_workers > 0 else None)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers,
-                             persistent_workers=True if num_workers > 0 else False)
+                             persistent_workers=True if num_workers > 0 else False,
+                             pin_memory=True if use_gpu else False,
+                             prefetch_factor=4 if num_workers > 0 else None)
 
     print(f"Train batches: {len(train_loader)}")
     print(f"Val batches: {len(val_loader)}")
@@ -192,13 +196,6 @@ def train_baseline(
     return model, trainer, checkpoint_callback.best_model_path
 
 def main():
-    # Fix CUDA multiprocessing for GPU data loading
-    import torch.multiprocessing as mp
-    try:
-        mp.set_start_method('spawn', force=True)
-    except RuntimeError:
-        pass  # Already set
-
     parser = argparse.ArgumentParser(description='Train baseline U-Net model')
     parser.add_argument('--data_dir', type=str, default='./data',
                         help='Path to dataset directory')

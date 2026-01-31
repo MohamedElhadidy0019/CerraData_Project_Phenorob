@@ -148,9 +148,8 @@ class MMDataset(Dataset):
         # Stack images along the channel dimension
         stacked_img = torch.cat((opt_img, sar_img), dim=0)
 
-        stacked_img = stacked_img.to(self.device)
-        semantic_mask = semantic_mask.to(self.device)
-        edge_mask = edge_mask.clone().detach().to(torch.float32).to(self.device)
+        # Keep on CPU - PyTorch Lightning will move to GPU automatically
+        edge_mask = edge_mask.clone().detach().to(torch.float32)
 
         return stacked_img, semantic_mask, edge_mask
 
@@ -212,9 +211,8 @@ class SARDataset(Dataset):
             semantic_mask = torch.tensor(semantic_mask, dtype=torch.int32)
             edge_mask = torch.tensor(edge_mask, dtype=torch.torch.float32)
 
-        sar_img = sar_img.to(self.device)
-        semantic_mask = semantic_mask.to(self.device)
-        edge_mask = edge_mask.clone().detach().to(torch.float32).to(self.device)
+        # Keep on CPU - PyTorch Lightning will move to GPU automatically
+        edge_mask = edge_mask.clone().detach().to(torch.float32)
 
         return sar_img, semantic_mask, edge_mask
 
@@ -277,9 +275,8 @@ class MSIDataset(Dataset):
             semantic_mask = torch.tensor(semantic_mask, dtype=torch.int32)
             edge_mask = torch.tensor(edge_mask, dtype=torch.torch.float32)
 
-        opt_img = opt_img.to(self.device)
-        semantic_mask = semantic_mask.to(self.device)
-        edge_mask = edge_mask.clone().detach().to(torch.float32).to(self.device)
+        # Keep on CPU - PyTorch Lightning will move to GPU automatically
+        edge_mask = edge_mask.clone().detach().to(torch.float32)
 
         return opt_img, semantic_mask, edge_mask
 

@@ -7,15 +7,14 @@ echo "=== L2 BASELINE EXPERIMENT - MULTIPLE DATA PERCENTAGES ==="
 echo "Starting at: $(date)"
 
 # Define percentages to test
-# PERCENTAGES="0.5 1 2.5 3.5 5 10 25 50"
-PERCENTAGES="0.5 1 2.5 3.5"
+PERCENTAGES="0.5 1 2.5 3.5 5 10 25 50"
 
 # Early stopping patience
-PATIENCE=30
+PATIENCE=50
 
 # Organized directories for scaling experiments
-LOG_BASE="./CerraData-4MM/experiment_results/logs/baseline"
-CHECKPOINT_BASE="./CerraData-4MM/experiment_results/weights/baseline"
+LOG_BASE="/home/s52melba/CerraData_Project_Phenorob/CerraData-4MM/experiment_diff_percentages/logs/baseline"
+CHECKPOINT_BASE="/home/s52melba/CerraData_Project_Phenorob/CerraData-4MM/experiment_diff_percentages/weights/baseline"
 
 # Create directories if they don't exist
 mkdir -p "$LOG_BASE"
@@ -34,12 +33,12 @@ for PCT in $PERCENTAGES; do
     echo "========================================="
 
     python train_l2_baseline.py \
-        --data_dir /home/s52melba/CerraData_Project_Phenorob/cerradata_splitted \
+        --data_dir /home/s52melba/CerraData_Project_Phenorob/CerraData-4MM/dataset_splitted \
         --label_level L2 \
         --experiment_name "l2_baseline_14classes_multimodal_${PCT_NAME}percent" \
         --gpu_ids "0" \
         --batch_size 100 \
-        --num_epochs 300 \
+        --num_epochs 500 \
         --learning_rate 1e-4 \
         --checkpoint_dir "$CHECKPOINT_BASE" \
         --log_dir "$LOG_BASE" \
