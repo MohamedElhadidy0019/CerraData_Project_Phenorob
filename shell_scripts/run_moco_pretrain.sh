@@ -1,13 +1,14 @@
 #!/bin/bash
 
-echo "=== MOCO V2 SELF-SUPERVISED PRETRAINING ==="
+echo "=== MOCO V2 SELF-SUPERVISED PRETRAINING (14-channel Multimodal) ==="
 echo "Starting at: $(date)"
 
 # Stronger augmentations + larger memory bank + lower temperature
 # Following recommendations to address dimensional collapse
+# Now using 14 channels (12 MSI + 2 SAR) from CerraData-4MM
 python train_moco_lightly.py \
-    --data_dir /home/s52melba/CerraData_Project_Phenorob/cerradata_splitted \
-    --experiment_name "moco_pretrain_resnet34_v2_more_aggressive" \
+    --data_dir /home/s52melba/CerraData_Project_Phenorob/CerraData-4MM/dataset_splitted \
+    --experiment_name "moco_pretrain_14ch_multimodal_aggressive" \
     --gpu_ids "0" \
     --batch_size 256 \
     --num_epochs 1000 \
@@ -17,7 +18,7 @@ python train_moco_lightly.py \
     --memory_bank_size 65536 \
     --num_workers 32 \
     --prefetch_factor 2 \
-    --checkpoint_dir ./checkpoints_data_splitted \
-    --log_dir ./logs_splitted
+    --checkpoint_dir /home/s52melba/CerraData_Project_Phenorob/CerraData-4MM/experiment_results/weights/moco \
+    --log_dir /home/s52melba/CerraData_Project_Phenorob/CerraData-4MM/experiment_results/logs/moco
 
 echo "Completed at: $(date)"

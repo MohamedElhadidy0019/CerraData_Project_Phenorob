@@ -2,9 +2,16 @@
 """
 Self-supervised pretraining with MoCo v2 (Momentum Contrast v2)
 Uses lightly's simplified approach with memory bank and utility functions
-Trains encoder on unlabeled MSI images (train split only)
+Trains encoder on unlabeled multimodal images (MSI+SAR, 14 channels, train split only)
 """
 import os
+import sys
+import warnings
+
+# Suppress warnings
+warnings.filterwarnings('ignore', category=FutureWarning, module='osgeo')
+warnings.filterwarnings('ignore', message='Can\'t initialize NVML')
+
 import torch
 import torch.nn as nn
 import pytorch_lightning as pl
@@ -12,7 +19,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger
 import argparse
 from datetime import datetime
-from torch.utils.data import DataLoader
+from torch.utils.data import Dataset, DataLoader
 import copy
 
 import segmentation_models_pytorch as smp
@@ -21,8 +28,251 @@ from lightly.loss import NTXentLoss
 from lightly.models.utils import deactivate_requires_grad, update_momentum
 from lightly.utils.scheduler import cosine_schedule
 
-# Import reusable components from SimCLR script
-from train_simclr_lightly import UnlabeledMSIDataset, MultispectralSimCLRTransform, MultispectralSimCLRTransformStrong
+import kornia.augmentation as K
+
+# Import MMDataset from CerraData-4MM
+from dataset_loader_official.dataset_loader import MMDataset
+
+
+class MultispectralSimCLRTransform:
+    """
+    Strong augmentations for 14-channel multimodal satellite imagery (MSI+SAR).
+    Designed for contrastive learning where we need views that are
+    challenging to match but preserve semantic content.
+    """
+
+    def __init__(
+        self,
+        img_size: int = 128,
+        # Geometric augmentation params
+        crop_scale: tuple = (0.2, 1.0),  # More aggressive cropping
+        crop_ratio: tuple = (0.75, 1.33),
+        # Spectral augmentation params
+        band_drop_prob: float = 0.1,      # Probability to zero out each band
+        max_bands_drop: int = 4,          # Max bands to drop at once (for 14 channels)
+        intensity_jitter: float = 0.2,    # Per-band intensity scaling
+        noise_std: float = 0.05,          # Gaussian noise std
+        # Other params
+        blur_prob: float = 0.5,
+        solarize_prob: float = 0.2,
+        solarize_threshold: float = 0.5,
+    ):
+        self.img_size = img_size
+        self.band_drop_prob = band_drop_prob
+        self.max_bands_drop = max_bands_drop
+        self.intensity_jitter = intensity_jitter
+        self.noise_std = noise_std
+        self.solarize_prob = solarize_prob
+        self.solarize_threshold = solarize_threshold
+
+        # Geometric augmentations (applied consistently across all bands)
+        self.geometric_aug = K.AugmentationSequential(
+            K.RandomResizedCrop(
+                size=(img_size, img_size),
+                scale=crop_scale,
+                ratio=crop_ratio,
+                p=1.0  # Always crop - this is crucial
+            ),
+            K.RandomHorizontalFlip(p=0.5),
+            K.RandomVerticalFlip(p=0.5),
+            K.RandomRotation(degrees=90, p=0.5),
+            data_keys=["input"],
+            same_on_batch=False
+        )
+
+        # Blur augmentation
+        self.blur = K.RandomGaussianBlur(
+            kernel_size=(3, 7),  # Smaller kernel range
+            sigma=(0.1, 2.0),
+            p=blur_prob
+        )
+
+    def _random_band_drop(self, img: torch.Tensor) -> torch.Tensor:
+        """
+        Randomly zero out some spectral bands.
+        Forces the model to not rely on any single band.
+
+        Args:
+            img: (C, H, W) tensor
+        """
+        if self.band_drop_prob <= 0:
+            return img
+
+        C = img.shape[0]
+        img = img.clone()
+
+        # Decide how many bands to drop (0 to max_bands_drop)
+        n_drop = torch.randint(0, self.max_bands_drop + 1, (1,)).item()
+
+        if n_drop > 0:
+            # Randomly select which bands to drop
+            drop_indices = torch.randperm(C)[:n_drop]
+            img[drop_indices] = 0.0
+
+        return img
+
+    def _intensity_jitter(self, img: torch.Tensor) -> torch.Tensor:
+        """
+        Per-band intensity scaling (like brightness/contrast for each band).
+        This is the multimodal equivalent of color jitter.
+
+        Each band gets multiplied by a random factor in [1-jitter, 1+jitter]
+        and shifted by a random offset.
+        """
+        if self.intensity_jitter <= 0:
+            return img
+
+        C = img.shape[0]
+        img = img.clone()
+
+        # Per-band multiplicative scaling
+        scale = 1.0 + (torch.rand(C, 1, 1, device=img.device) * 2 - 1) * self.intensity_jitter
+
+        # Per-band additive shift (smaller magnitude)
+        shift = (torch.rand(C, 1, 1, device=img.device) * 2 - 1) * (self.intensity_jitter * 0.5)
+
+        img = img * scale + shift
+
+        return img
+
+    def _add_noise(self, img: torch.Tensor) -> torch.Tensor:
+        """Add Gaussian noise to simulate sensor noise."""
+        if self.noise_std <= 0:
+            return img
+
+        noise = torch.randn_like(img) * self.noise_std
+        return img + noise
+
+    def _solarize(self, img: torch.Tensor) -> torch.Tensor:
+        """
+        Solarize augmentation: invert pixels above threshold.
+        Works per-channel for multimodal data.
+        """
+        if torch.rand(1).item() > self.solarize_prob:
+            return img
+
+        # Assuming data is normalized around 0, use absolute threshold
+        mask = img > self.solarize_threshold
+        img = img.clone()
+        img[mask] = -img[mask]  # Invert values above threshold
+
+        return img
+
+    def augment_single(self, img: torch.Tensor) -> torch.Tensor:
+        """
+        Apply full augmentation pipeline to a single image.
+
+        Args:
+            img: (C, H, W) tensor, already normalized
+
+        Returns:
+            Augmented (C, H, W) tensor
+        """
+        # 1. Geometric augmentations (add batch dim for kornia)
+        img = img.unsqueeze(0)
+        img = self.geometric_aug(img)
+        img = self.blur(img)
+        img = img.squeeze(0)
+
+        # 2. Spectral augmentations (multimodal-specific)
+        img = self._intensity_jitter(img)
+        img = self._random_band_drop(img)
+        img = self._add_noise(img)
+        img = self._solarize(img)
+
+        return img
+
+    def __call__(self, img: torch.Tensor) -> tuple:
+        """
+        Generate two augmented views of the input image.
+
+        Args:
+            img: (C, H, W) tensor
+
+        Returns:
+            Tuple of two augmented views
+        """
+        view1 = self.augment_single(img)
+        view2 = self.augment_single(img)
+
+        return view1, view2
+
+
+class MultispectralSimCLRTransformStrong(MultispectralSimCLRTransform):
+    """
+    Even stronger augmentations for 14-channel multimodal imagery.
+    Use this for MoCo training to prevent dimensional collapse.
+    """
+
+    def __init__(self, img_size: int = 128):
+        super().__init__(
+            img_size=img_size,
+            crop_scale=(0.08, 1.0),      # Very aggressive crops (like ImageNet)
+            band_drop_prob=0.15,
+            max_bands_drop=5,             # Drop up to 5 of 14 bands (~36%)
+            intensity_jitter=0.3,         # Stronger intensity changes
+            noise_std=0.08,
+            blur_prob=0.5,
+            solarize_prob=0.3,
+        )
+
+        # Add extra augmentations
+        self.cutout = K.RandomErasing(
+            p=0.3,
+            scale=(0.02, 0.2),
+            ratio=(0.3, 3.3),
+            value=0.0
+        )
+
+    def augment_single(self, img: torch.Tensor) -> torch.Tensor:
+        """Apply stronger augmentation pipeline."""
+        # Base augmentations
+        img = super().augment_single(img)
+
+        # Additional: Random erasing (cutout)
+        img = img.unsqueeze(0)
+        img = self.cutout(img)
+        img = img.squeeze(0)
+
+        return img
+
+
+class UnlabeledMMDataset(Dataset):
+    """
+    Wrapper around MMDataset for self-supervised MoCo training.
+    Returns only images (14 channels: MSI+SAR), ignores masks.
+    """
+
+    def __init__(self, data_dir, transform=None):
+        """
+        Args:
+            data_dir: Path to dataset directory (e.g., dataset_splitted)
+            transform: Transform for creating augmented views
+        """
+        # Use MMDataset to load 14-channel multimodal data from train split
+        self.dataset = MMDataset(
+            dir_path=os.path.join(data_dir, 'train'),
+            gpu='cpu',  # Load on CPU, PyTorch Lightning will move to GPU
+            norm='none'
+        )
+        self.transform = transform
+        print(f"Loaded {len(self.dataset)} unlabeled training images (14 channels: MSI+SAR)")
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, idx):
+        """
+        Returns:
+            If transform is provided: tuple of (view1, view2) - augmented views
+            Otherwise: stacked_img (14, H, W)
+        """
+        stacked_img, _, _ = self.dataset[idx]  # Get image, ignore semantic_mask and edge_mask
+
+        # Apply augmentations (returns tuple of 2 views for contrastive learning)
+        if self.transform:
+            return self.transform(stacked_img)
+        return stacked_img
 
 
 class MoCoModel(pl.LightningModule):
@@ -35,7 +285,7 @@ class MoCoModel(pl.LightningModule):
 
     def __init__(
         self,
-        in_channels=12,
+        in_channels=14,  # 12 MSI + 2 SAR
         encoder_name="resnet34",
         learning_rate=0.03,
         weight_decay=1e-4,
@@ -97,6 +347,7 @@ class MoCoModel(pl.LightningModule):
         )
 
         print(f"MoCo v2 model initialized:")
+        print(f"  Input channels: {in_channels} (12 MSI + 2 SAR)")
         print(f"  Encoder: {encoder_name} (output dim: 512)")
         print(f"  Projection: 512 → {hidden_dim} → {projection_dim}")
         print(f"  Temperature: {temperature}")
@@ -230,7 +481,7 @@ def train_moco(
 ):
     """Train MoCo v2 model on unlabeled training images"""
 
-    print("=== MoCo v2 Self-Supervised Pretraining ===")
+    print("=== MoCo v2 Self-Supervised Pretraining (14-channel Multimodal) ===")
     print(f"Data directory: {data_dir}")
     print(f"Batch size: {batch_size}")
     print(f"Learning rate: {learning_rate}")
@@ -255,12 +506,12 @@ def train_moco(
     print(f"Devices: {devices}")
     print(f"Strategy: {strategy}")
 
-    # Use strong augmentations for MoCo training
+    # Use strong augmentations for MoCo training (14 channels)
     transform = MultispectralSimCLRTransformStrong()
 
-    # Reuse dataset from SimCLR script
+    # Create unlabeled dataset using MMDataset wrapper
     print("\nCreating unlabeled dataset (train split only)...")
-    train_dataset = UnlabeledMSIDataset(
+    train_dataset = UnlabeledMMDataset(
         data_dir=data_dir,
         transform=transform
     )
@@ -279,10 +530,10 @@ def train_moco(
 
     print(f"Train batches: {len(train_loader)}")
 
-    # Create MoCo v2 model
+    # Create MoCo v2 model (14 channels)
     print("\nCreating MoCo v2 model...")
     model = MoCoModel(
-        in_channels=12,
+        in_channels=14,  # 12 MSI + 2 SAR
         encoder_name="resnet34",
         learning_rate=learning_rate,
         temperature=temperature,
@@ -300,7 +551,7 @@ def train_moco(
     # Setup callbacks
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     if experiment_name is None:
-        experiment_name = f"moco_pretrain_{timestamp}"
+        experiment_name = f"moco_pretrain_14ch_{timestamp}"
     else:
         experiment_name = f"{experiment_name}_{timestamp}"
 
@@ -356,6 +607,7 @@ def train_moco(
         f.write(f"Model: U-Net ResNet34 encoder with MoCo v2\n")
         f.write(f"Task: Self-supervised contrastive learning\n")
         f.write(f"Dataset: CerraData-4MM (unlabeled training images)\n")
+        f.write(f"Input: 14 channels (12 MSI + 2 SAR)\n")
         f.write(f"Training samples: {len(train_dataset)}\n")
         f.write(f"Batch size: {batch_size}\n")
         f.write(f"Learning rate: {learning_rate}\n")
