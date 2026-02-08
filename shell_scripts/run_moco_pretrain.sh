@@ -18,7 +18,7 @@ python train_moco_lightly.py \
     --memory_bank_size 65536 \
     --num_workers 32 \
     --prefetch_factor 2 \
-    --checkpoint_dir /home/s52melba/CerraData_Project_Phenorob/CerraData-4MM/experiment_results/weights/moco \
-    --log_dir /home/s52melba/CerraData_Project_Phenorob/CerraData-4MM/experiment_results/logs/moco
+    --checkpoint_dir /home/s52melba/CerraData_Project_Phenorob/CerraData-4MM/experiment_results/weights/ \
+    --log_dir /home/s52melba/CerraData_Project_Phenorob/CerraData-4MM/experiment_results/logs/
 
 echo "Completed at: $(date)"
