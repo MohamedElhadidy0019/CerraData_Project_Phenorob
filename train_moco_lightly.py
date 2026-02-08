@@ -243,20 +243,21 @@ class UnlabeledMMDataset(Dataset):
     Returns only images (14 channels: MSI+SAR), ignores masks.
     """
 
-    def __init__(self, data_dir, transform=None):
+    def __init__(self, data_dir, transform=None, norm='z_score'):
         """
         Args:
             data_dir: Path to dataset directory (e.g., dataset_splitted)
             transform: Transform for creating augmented views
+            norm: Normalization type ('none', '0to1', '1to1', 'z_score')
         """
         # Use MMDataset to load 14-channel multimodal data from train split
         self.dataset = MMDataset(
             dir_path=os.path.join(data_dir, 'train'),
             gpu='cpu',  # Load on CPU, PyTorch Lightning will move to GPU
-            norm='1to1'
+            norm=norm
         )
         self.transform = transform
-        print(f"Loaded {len(self.dataset)} unlabeled training images (14 channels: MSI+SAR)")
+        print(f"Loaded {len(self.dataset)} unlabeled training images (14 channels: MSI+SAR, norm={norm})")
 
     def __len__(self):
         return len(self.dataset)
@@ -475,6 +476,7 @@ def train_moco(
     num_workers=4,
     prefetch_factor=2,
     gpu_ids=None,
+    norm='z_score',
     checkpoint_dir="./checkpoints_data_splitted",
     log_dir="./logs_splitted",
     experiment_name=None
@@ -513,7 +515,8 @@ def train_moco(
     print("\nCreating unlabeled dataset (train split only)...")
     train_dataset = UnlabeledMMDataset(
         data_dir=data_dir,
-        transform=transform
+        transform=transform,
+        norm=norm
     )
 
     # Create data loader
@@ -649,6 +652,8 @@ def main():
                         help='Number of batches to prefetch per worker')
     parser.add_argument('--gpu_ids', type=str, default=None,
                         help='GPU IDs to use (e.g., "0" or "0,1,2,3")')
+    parser.add_argument('--norm', type=str, default='z_score',
+                        help='Normalization type: none, 0to1, 1to1, z_score (default: z_score)')
     parser.add_argument('--checkpoint_dir', type=str, default='./checkpoints_data_splitted',
                         help='Directory to save checkpoints')
     parser.add_argument('--log_dir', type=str, default='./logs_splitted',
@@ -683,6 +688,7 @@ def main():
         num_workers=args.num_workers,
         prefetch_factor=args.prefetch_factor,
         gpu_ids=gpu_ids,
+        norm=args.norm,
         checkpoint_dir=args.checkpoint_dir,
         log_dir=args.log_dir,
         experiment_name=args.experiment_name

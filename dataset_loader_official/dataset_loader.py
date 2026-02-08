@@ -69,11 +69,20 @@ def normalizer(img_path, modality, norm_type):
     elif norm_type == '1to1':
         #print('-1 to 1 normalization')
         for j in range(len(data)):
-            normalized[j] = ((np.log(data[j]) - np.log(mean[j])) / np.log(stddev[j]))
-        
+            normalized[j] = ((np.log(data[j]) - np.log(mean[j])) / (np.log(stddev[j]) + 1e-8))
+
         return normalized
+
+    # Z-score normalization (mean=0, std=1)
+    elif norm_type == 'z_score':
+        #print('Z-score normalization')
+        for j in range(len(data)):
+            normalized[j] = (data[j] - mean[j]) / (stddev[j] + 1e-8)
+
+        return normalized
+
     else:
-        print('Error: Normalization type if not available. Please, select either "none", "0to1" or "1to1".')
+        print('Error: Normalization type if not available. Please, select either "none", "0to1", "1to1", or "z_score".')
 
 
 
