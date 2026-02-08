@@ -12,8 +12,8 @@ python train_moco_lightly.py \
     --gpu_ids "0" \
     --batch_size 256 \
     --num_epochs 1000 \
-    --learning_rate 0.01 \
-    --temperature 0.1 \
+    --learning_rate 0.05 \
+    --temperature 0.07 \
     --projection_dim 128 \
     --memory_bank_size 65536 \
     --num_workers 32 \

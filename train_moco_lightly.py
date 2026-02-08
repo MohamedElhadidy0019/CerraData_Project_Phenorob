@@ -253,7 +253,7 @@ class UnlabeledMMDataset(Dataset):
         self.dataset = MMDataset(
             dir_path=os.path.join(data_dir, 'train'),
             gpu='cpu',  # Load on CPU, PyTorch Lightning will move to GPU
-            norm='none'
+            norm='1to1'
         )
         self.transform = transform
         print(f"Loaded {len(self.dataset)} unlabeled training images (14 channels: MSI+SAR)")
