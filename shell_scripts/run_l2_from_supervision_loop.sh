@@ -5,7 +5,7 @@
 
 # UPDATE THIS PATH after MoCo pretraining completes!
 # The encoder will be saved in: experiment_results/weights/moco/moco_pretrain_14ch_TIMESTAMP/encoder_final.pth
-MOCO_ENCODER="/home/s52melba/CerraData_Project_Phenorob/CerraData-4MM/experiment_results/weights/moco_pretrain_14ch_multimodal_aggressive_TIMESTAMP/encoder_final.pth"
+MOCO_ENCODER="/home/s52melba/CerraData_Project_Phenorob/CerraData-4MM/experiment_results/weights/moco_pretrain_14ch_multimodal_aggressive_20260208_204941/encoder_final.pth"
 
 echo "=== L2 FINE-TUNING FROM MOCO (14-channel) - MULTIPLE DATA PERCENTAGES ==="
 echo "Using encoder: $MOCO_ENCODER"
@@ -17,11 +17,11 @@ echo "Starting at: $(date)"
 PERCENTAGES="0.5 1 2.5 3.5 5 10 25 50"
 
 # Early stopping patience
-PATIENCE=30
+PATIENCE=50
 
 # Organized directories for scaling experiments (14-channel multimodal)
-LOG_BASE="/home/s52melba/CerraData_Project_Phenorob/CerraData-4MM/experiment_results/logs/l2_from_moco_scaling"
-CHECKPOINT_BASE="/home/s52melba/CerraData_Project_Phenorob/CerraData-4MM/experiment_results/weights/l2_from_moco_scaling"
+LOG_BASE="/home/s52melba/CerraData_Project_Phenorob/CerraData-4MM/experiment_diff_percentages/logs/frozen_moco_encoder"
+CHECKPOINT_BASE="/home/s52melba/CerraData_Project_Phenorob/CerraData-4MM/experiment_diff_percentages/weights/frozen_moco_encoder"
 
 # Create directories if they don't exist
 mkdir -p "$LOG_BASE"
@@ -45,7 +45,7 @@ for PCT in $PERCENTAGES; do
         --experiment_name "l2_from_moco_14ch_frozen_${PCT_NAME}percent" \
         --gpu_ids "0" \
         --batch_size 100 \
-        --num_epochs 300 \
+        --num_epochs 500 \
         --learning_rate 1e-4 \
         --data_percentage $PCT \
         --patience $PATIENCE \
