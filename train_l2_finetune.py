@@ -32,6 +32,7 @@ def train_l2_finetune(
     learning_rate=1e-4,  # Lower LR for fine-tuning
     num_workers=4,
     gpu_ids=None,
+    norm='z_score',
     checkpoint_dir="./checkpoints",
     log_dir="./logs",
     experiment_name=None,
@@ -48,6 +49,7 @@ def train_l2_finetune(
     print(f"Batch size: {batch_size}")
     print(f"Learning rate: {learning_rate}")
     print(f"Max epochs: {num_epochs}")
+    print(f"Normalization: {norm}")
     print(f"GPU IDs: {gpu_ids}")
     print(f"Freeze encoder: {freeze_encoder}")
 
@@ -75,9 +77,9 @@ def train_l2_finetune(
     print(f"\nLoading CerraData-4MM datasets (L2: 14 classes, Multimodal)...")
 
     # Load datasets on CPU (PyTorch Lightning will move to GPU automatically)
-    train_dataset_full = MMDataset(dir_path=os.path.join(data_dir, 'train'), gpu='cpu', norm='none')
-    val_dataset_full = MMDataset(dir_path=os.path.join(data_dir, 'val'), gpu='cpu', norm='none')
-    test_dataset = MMDataset(dir_path=os.path.join(data_dir, 'test'), gpu='cpu', norm='none')
+    train_dataset_full = MMDataset(dir_path=os.path.join(data_dir, 'train'), gpu='cpu', norm=norm)
+    val_dataset_full = MMDataset(dir_path=os.path.join(data_dir, 'val'), gpu='cpu', norm=norm)
+    test_dataset = MMDataset(dir_path=os.path.join(data_dir, 'test'), gpu='cpu', norm=norm)
 
     # Apply data percentage to train and val (with seed for reproducibility)
     if data_percentage < 100:
@@ -281,6 +283,8 @@ def main():
                         help='Number of data loader workers')
     parser.add_argument('--gpu_ids', type=str, default=None,
                         help='GPU IDs to use (e.g., "0" or "0,1,2,3" for multi-GPU)')
+    parser.add_argument('--norm', type=str, default='z_score',
+                        help='Normalization type: none, 0to1, 1to1, z_score (default: z_score)')
     parser.add_argument('--checkpoint_dir', type=str, default='./checkpoints',
                         help='Directory to save checkpoints')
     parser.add_argument('--log_dir', type=str, default='./logs',
@@ -325,6 +329,7 @@ def main():
         learning_rate=args.learning_rate,
         num_workers=args.num_workers,
         gpu_ids=gpu_ids,
+        norm=args.norm,
         checkpoint_dir=args.checkpoint_dir,
         log_dir=args.log_dir,
         experiment_name=args.experiment_name,

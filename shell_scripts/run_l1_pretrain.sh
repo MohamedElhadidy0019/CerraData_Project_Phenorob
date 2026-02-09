@@ -13,6 +13,7 @@ python train_l1_baseline.py \
     --batch_size 256 \
     --num_epochs 500 \
     --learning_rate 1e-4 \
+    --norm z_score \
     --checkpoint_dir ./CerraData-4MM/experiment_results/weights \
     --log_dir ./CerraData-4MM/experiment_results/logs \
     --patience 30 \

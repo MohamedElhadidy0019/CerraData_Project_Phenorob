@@ -40,6 +40,7 @@ for PCT in $PERCENTAGES; do
         --batch_size 100 \
         --num_epochs 500 \
         --learning_rate 1e-4 \
+        --norm z_score \
         --checkpoint_dir "$CHECKPOINT_BASE" \
         --log_dir "$LOG_BASE" \
         --data_percentage $PCT \

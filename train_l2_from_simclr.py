@@ -3,6 +3,13 @@
 Fine-tune L2 model using MoCo pretrained encoder
 """
 import os
+import sys
+import warnings
+
+# Suppress warnings
+warnings.filterwarnings('ignore', category=FutureWarning, module='osgeo')
+warnings.filterwarnings('ignore', message='Can\'t initialize NVML')
+
 import torch
 import torch.nn as nn
 import pytorch_lightning as pl
@@ -10,8 +17,11 @@ from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
 from pytorch_lightning.loggers import TensorBoardLogger
 import argparse
 from datetime import datetime
+from torch.utils.data import DataLoader, Subset
 
-from dataset import create_data_loaders
+# Import MMDataset from CerraData-4MM (Multimodal: MSI+SAR, 14 channels, L2 classes)
+from dataset_loader_official.dataset_loader import MMDataset
+
 from model import UNetSegmentation
 
 
@@ -23,11 +33,14 @@ def train_l2_from_simclr(
     learning_rate=1e-4,  # Lower LR for fine-tuning
     num_workers=4,
     gpu_ids=None,
+    norm='z_score',
+    freeze_encoder=True,
     checkpoint_dir="./checkpoints_data_splitted",
     log_dir="./logs_splitted",
     experiment_name=None,
     data_percentage=5,
-    patience=40
+    patience=40,
+    seed=42
 ):
     """Fine-tune L2 model using MoCo pretrained encoder"""
 
@@ -38,8 +51,14 @@ def train_l2_from_simclr(
     print(f"Learning rate: {learning_rate}")
     print(f"Max epochs: {num_epochs}")
     print(f"Data percentage: {data_percentage}%")
+    print(f"Normalization: {norm}")
+    print(f"Freeze encoder: {freeze_encoder}")
     print(f"Early stopping patience: {patience}")
     print(f"GPU IDs: {gpu_ids}")
+
+    # Set seeds for reproducibility
+    pl.seed_everything(seed, workers=True)
+    print(f"Random seed: {seed}")
 
     # Handle GPU configuration
     if gpu_ids is None:
@@ -57,24 +76,61 @@ def train_l2_from_simclr(
     print(f"Devices: {devices}")
     print(f"Strategy: {strategy}")
 
-    # Create data loaders for L2 (14-class) labels
-    print("\nCreating L2 data loaders...")
-    train_loader, val_loader, test_loader = create_data_loaders(
-        data_dir=data_dir,
-        batch_size=batch_size,
-        num_workers=num_workers,
-        label_level='L2',
-        data_percentage=data_percentage
-    )
+    # Create data loaders using CerraData-4MM's MMDataset (MSI+SAR, 14 channels)
+    print(f"\nLoading CerraData-4MM datasets (L2: 14 classes, Multimodal)...")
 
-    print(f"Train batches: {len(train_loader)}")
-    print(f"Val batches: {len(val_loader)}")
-    print(f"Test batches: {len(test_loader)}")
+    # Load datasets on CPU (PyTorch Lightning will move to GPU automatically)
+    train_dataset_full = MMDataset(dir_path=os.path.join(data_dir, 'train'), gpu='cpu', norm=norm)
+    val_dataset_full = MMDataset(dir_path=os.path.join(data_dir, 'val'), gpu='cpu', norm=norm)
+    test_dataset = MMDataset(dir_path=os.path.join(data_dir, 'test'), gpu='cpu', norm=norm)
+
+    # Apply data percentage to train and val (with seed for reproducibility)
+    if data_percentage < 100:
+        # Train subset
+        train_size = max(10, int(round(len(train_dataset_full) * data_percentage / 100)))
+        train_indices = torch.randperm(len(train_dataset_full), generator=torch.Generator().manual_seed(seed))[:train_size]
+        train_dataset = Subset(train_dataset_full, train_indices.tolist())
+
+        # Val subset
+        val_size = max(10, int(round(len(val_dataset_full) * data_percentage / 100)))
+        val_indices = torch.randperm(len(val_dataset_full), generator=torch.Generator().manual_seed(seed))[:val_size]
+        val_dataset = Subset(val_dataset_full, val_indices.tolist())
+
+        print(f"Using {data_percentage}% of data (seed={seed}):")
+        print(f"  Train: {len(train_dataset)} / {len(train_dataset_full)} samples")
+        print(f"  Val: {len(val_dataset)} / {len(val_dataset_full)} samples")
+    else:
+        train_dataset = train_dataset_full
+        val_dataset = val_dataset_full
+        print(f"Using 100% of data:")
+        print(f"  Train: {len(train_dataset)} samples")
+        print(f"  Val: {len(val_dataset)} samples")
+
+    print(f"  Test: {len(test_dataset)} samples (always 100%)")
+
+    # Create DataLoaders with optimizations
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers,
+                              persistent_workers=True if num_workers > 0 else False,
+                              pin_memory=True if use_gpu else False,
+                              prefetch_factor=4 if num_workers > 0 else None)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers,
+                            persistent_workers=True if num_workers > 0 else False,
+                            pin_memory=True if use_gpu else False,
+                            prefetch_factor=4 if num_workers > 0 else None)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers,
+                             persistent_workers=True if num_workers > 0 else False,
+                             pin_memory=True if use_gpu else False,
+                             prefetch_factor=4 if num_workers > 0 else None)
+
+    print(f"\nDataLoader batches:")
+    print(f"  Train: {len(train_loader)} batches")
+    print(f"  Val: {len(val_loader)} batches")
+    print(f"  Test: {len(test_loader)} batches")
 
     # Create new L2 model with randomly initialized weights
     print("\nCreating L2 model...")
     l2_model = UNetSegmentation(
-        in_channels=12,
+        in_channels=14,  # Multimodal: 12 MSI + 2 SAR
         num_classes=14,  # L2 has 14 classes
         encoder_name="resnet34",
         learning_rate=learning_rate
@@ -88,7 +144,24 @@ def train_l2_from_simclr(
 
     # Decoder is randomly initialized (no pretraining)
     print("✓ Decoder randomly initialized")
-    print(f"L2 Model parameters: {sum(p.numel() for p in l2_model.parameters()):,}")
+
+    # FREEZE ENCODER - Only train decoder and segmentation head
+    if freeze_encoder:
+        print("\n🔒 FREEZING ENCODER - Only decoder will be trained")
+        for param in l2_model.model.encoder.parameters():
+            param.requires_grad = False
+
+        # Count trainable vs frozen parameters
+        trainable_params = sum(p.numel() for p in l2_model.parameters() if p.requires_grad)
+        frozen_params = sum(p.numel() for p in l2_model.parameters() if not p.requires_grad)
+        total_params = trainable_params + frozen_params
+
+        print(f"Total parameters: {total_params:,}")
+        print(f"Trainable parameters: {trainable_params:,} ({100*trainable_params/total_params:.1f}%)")
+        print(f"Frozen parameters: {frozen_params:,} ({100*frozen_params/total_params:.1f}%)")
+    else:
+        print("\nEncoder NOT frozen - Full model will be trained")
+        print(f"L2 Model parameters: {sum(p.numel() for p in l2_model.parameters()):,}")
 
     # Create directories
     os.makedirs(checkpoint_dir, exist_ok=True)
@@ -97,7 +170,8 @@ def train_l2_from_simclr(
     # Setup callbacks
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     if experiment_name is None:
-        experiment_name = f"l2_from_moco_{data_percentage}percent_{timestamp}"
+        freeze_str = "frozen" if freeze_encoder else "unfrozen"
+        experiment_name = f"l2_from_moco_14ch_{freeze_str}_{data_percentage}percent_{timestamp}"
     else:
         experiment_name = f"{experiment_name}_{timestamp}"
 
@@ -159,8 +233,11 @@ def train_l2_from_simclr(
         f.write(f"==================================\n\n")
         f.write(f"Experiment: {experiment_name}\n")
         f.write(f"Model: U-Net with ResNet34 encoder (MoCo pretrained → L2 fine-tuned)\n")
+        f.write(f"Input: 14 channels (12 MSI + 2 SAR)\n")
         f.write(f"Task: 14-class semantic segmentation (L2 labels)\n")
         f.write(f"Pretraining: MoCo encoder from {moco_encoder_path}\n")
+        f.write(f"Encoder frozen: {freeze_encoder}\n")
+        f.write(f"Normalization: {norm}\n")
         f.write(f"Dataset: CerraData-4MM\n")
         f.write(f"Training samples: {len(train_loader.dataset)}\n")
         f.write(f"Validation samples: {len(val_loader.dataset)}\n")
@@ -197,6 +274,10 @@ def main():
                         help='Number of data loader workers')
     parser.add_argument('--gpu_ids', type=str, default=None,
                         help='GPU IDs to use (e.g., "0" or "0,1,2,3")')
+    parser.add_argument('--norm', type=str, default='z_score',
+                        help='Normalization type: none, 0to1, 1to1, z_score (default: z_score)')
+    parser.add_argument('--freeze_encoder', action='store_true',
+                        help='Freeze encoder weights (only train decoder)')
     parser.add_argument('--checkpoint_dir', type=str, default='./checkpoints_data_splitted',
                         help='Directory to save checkpoints')
     parser.add_argument('--log_dir', type=str, default='./logs_splitted',
@@ -207,11 +288,10 @@ def main():
                         help='Percentage of data to use (0.1-100, accepts decimals)')
     parser.add_argument('--patience', type=int, default=40,
                         help='Early stopping patience (number of epochs)')
+    parser.add_argument('--seed', type=int, default=42,
+                        help='Random seed for reproducibility')
 
     args = parser.parse_args()
-
-    # Set seeds for reproducibility
-    pl.seed_everything(42, workers=True)
 
     # Check if MoCo encoder exists
     if not os.path.exists(args.moco_encoder):
@@ -238,11 +318,14 @@ def main():
         learning_rate=args.learning_rate,
         num_workers=args.num_workers,
         gpu_ids=gpu_ids,
+        norm=args.norm,
+        freeze_encoder=args.freeze_encoder,
         checkpoint_dir=args.checkpoint_dir,
         log_dir=args.log_dir,
         experiment_name=args.experiment_name,
         data_percentage=args.data_percentage,
-        patience=args.patience
+        patience=args.patience,
+        seed=args.seed
     )
 
 
