@@ -4,7 +4,7 @@
 #SBATCH --error=logs/l2_finetune_loop_%j.err
 
 # UPDATE THIS PATH to your best L1 checkpoint
-L1_CHECKPOINT="/home/s52melba/CerraData_Project_Phenorob/CerraData-4MM/experiment_results/weights/l1_pretrain_7classes_multimodal_20260130_225343/last.ckpt"
+L1_CHECKPOINT="/home/s52melba/CerraData_Project_Phenorob/CerraData-4MM/experiment_results/weights/l1_pretrain_7classes_multimodal_20260209_191505/last.ckpt"
 
 echo "=== L2 FINE-TUNING EXPERIMENT (FROZEN ENCODER) - MULTIPLE DATA PERCENTAGES ==="
 echo "Starting at: $(date)"
