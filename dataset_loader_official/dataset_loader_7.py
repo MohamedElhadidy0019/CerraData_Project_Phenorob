@@ -146,7 +146,7 @@ class MMDataset(Dataset):
             opt_img = torch.tensor(opt_img, dtype=torch.float32)
             sar_img = torch.tensor(sar_img, dtype=torch.float32)
             semantic_mask = torch.tensor(semantic_mask, dtype=torch.int32)
-            edge_mask = torch.tensor(edge_mask, dtype=torch.torch.float32)
+            edge_mask = torch.tensor(edge_mask, dtype=torch.float32)
             # 
             #opt_img = torch.tensor(opt_img.astype(np.float32))
             #sar_img = torch.tensor(sar_img.astype(np.float32))
@@ -217,11 +217,11 @@ class SARDataset(Dataset):
         else:
             sar_img = torch.tensor(sar_img, dtype=torch.float32)
             semantic_mask = torch.tensor(semantic_mask, dtype=torch.int32)
-            edge_mask = torch.tensor(edge_mask, dtype=torch.torch.float32)
+            edge_mask = torch.tensor(edge_mask, dtype=torch.float32)
 
-        sar_img = sar_img.to(self.device)
-        semantic_mask = semantic_mask.to(self.device)
-        edge_mask = torch.tensor(edge_mask, dtype=torch.float32).to(self.device)
+        # sar_img = sar_img.to(self.device)
+        # semantic_mask = semantic_mask.to(self.device)
+        # edge_mask = torch.tensor(edge_mask, dtype=torch.float32).to(self.device)
 
         return sar_img, semantic_mask, edge_mask
 
@@ -282,11 +282,11 @@ class MSIDataset(Dataset):
         else:
             opt_img = torch.tensor(opt_img, dtype=torch.float32)
             semantic_mask = torch.tensor(semantic_mask, dtype=torch.int32)
-            edge_mask = torch.tensor(edge_mask, dtype=torch.torch.float32)
+            edge_mask = torch.tensor(edge_mask, dtype=torch.float32)
 
-        opt_img = opt_img.to(self.device)
-        semantic_mask = semantic_mask.to(self.device)
-        edge_mask = torch.tensor(edge_mask, dtype=torch.float32).to(self.device)
+        # opt_img = opt_img.to(self.device)
+        # semantic_mask = semantic_mask.to(self.device)
+        # edge_mask = torch.tensor(edge_mask, dtype=torch.float32).to(self.device)
 
         return opt_img, semantic_mask, edge_mask
 
@@ -356,7 +356,7 @@ class MM2Dataset(Dataset):
             opt_img = torch.tensor(opt_img, dtype=torch.float32)
             sar_img = torch.tensor(sar_img, dtype=torch.float32)
             semantic_mask = torch.tensor(semantic_mask, dtype=torch.int32)
-            edg_distance_transform = torch.tensor(edg_distance_transform, dtype=torch.torch.float32)
+            edg_distance_transform = torch.tensor(edg_distance_transform, dtype=torch.float32)
 
         # Stack images along the channel dimension
         stacked_img = torch.cat((opt_img, sar_img), dim=0)
