@@ -142,17 +142,23 @@ def create_markdown_table(results):
         finetune_f1 = results.get('finetune_frozen', {}).get(pct, None)
         moco_f1 = results.get('frozen_moco_encoder', {}).get(pct, None)
 
-        baseline_str = f"{baseline_f1:.4f}" if baseline_f1 else "-"
-        finetune_str = f"{finetune_f1:.4f}" if finetune_f1 else "-"
-        moco_str = f"{moco_f1:.4f}" if moco_f1 else "-"
+        # Find the highest value in this row
+        values = [v for v in [baseline_f1, finetune_f1, moco_f1] if v is not None]
+        max_value = max(values) if values else None
+
+        # Format with bold for highest value
+        baseline_str = f"**{baseline_f1:.4f}**" if baseline_f1 and baseline_f1 == max_value else (f"{baseline_f1:.4f}" if baseline_f1 else "-")
+        finetune_str = f"**{finetune_f1:.4f}**" if finetune_f1 and finetune_f1 == max_value else (f"{finetune_f1:.4f}" if finetune_f1 else "-")
+        moco_str = f"**{moco_f1:.4f}**" if moco_f1 and moco_f1 == max_value else (f"{moco_f1:.4f}" if moco_f1 else "-")
 
         md_content += f"| {pct}% | {baseline_str} | {finetune_str} | {moco_str} |\n"
 
     return md_content
 
-def create_comparison_plot(results):
+def create_comparison_plot(results, output_dir='.'):
     """Create a comparison plot of all experiments."""
-    plt.figure(figsize=(12, 7))
+    # Wider figure for more data points
+    plt.figure(figsize=(14, 7))
 
     colors = {
         'baseline': '#e74c3c',  # Red
@@ -165,6 +171,12 @@ def create_comparison_plot(results):
         'finetune_frozen': 's',
         'frozen_moco_encoder': '^'
     }
+
+    # Get all unique percentages for x-axis
+    all_percentages = set()
+    for exp_results in results.values():
+        all_percentages.update(exp_results.keys())
+    all_percentages = sorted(all_percentages)
 
     for exp_key, exp_config in EXPERIMENTS.items():
         if exp_key not in results or not results[exp_key]:
@@ -189,22 +201,19 @@ def create_comparison_plot(results):
     plt.legend(fontsize=11, loc='lower right', framealpha=0.9)
     plt.grid(True, alpha=0.3, linestyle='--')
 
-    # Set x-axis to log scale for better visualization
-    plt.xscale('log')
-    plt.xticks(percentages, [f'{p}%' for p in percentages], rotation=0)
-
-    # Add minor gridlines
-    plt.grid(True, which='minor', alpha=0.1, linestyle=':')
+    # Use linear scale for better readability with many points
+    # Set x-axis ticks at actual data points
+    plt.xticks(all_percentages, [f'{p}%' for p in all_percentages], rotation=45, ha='right')
 
     plt.tight_layout()
 
     # Save plot
-    output_plot = 'l2_comparison_plot.png'
+    output_plot = os.path.join(output_dir, 'l2_comparison_plot.png')
     plt.savefig(output_plot, dpi=300, bbox_inches='tight')
     print(f"\n✅ Plot saved to: {output_plot}")
 
     # Also save as PDF for publication quality
-    output_pdf = 'l2_comparison_plot.pdf'
+    output_pdf = os.path.join(output_dir, 'l2_comparison_plot.pdf')
     plt.savefig(output_pdf, bbox_inches='tight')
     print(f"✅ PDF saved to: {output_pdf}")
 
@@ -212,6 +221,11 @@ def main():
     print("=" * 70)
     print("Extracting Test F1-Macro from Tensorboard Logs")
     print("=" * 70)
+
+    # Create output directory
+    output_dir = 'analysis'
+    os.makedirs(output_dir, exist_ok=True)
+    print(f"Output directory: {output_dir}/")
 
     # Extract results
     results = extract_results()
@@ -222,13 +236,13 @@ def main():
 
     # Create markdown table
     md_content = create_markdown_table(results)
-    output_md = 'l2_results_comparison.md'
+    output_md = os.path.join(output_dir, 'l2_results_comparison.md')
     with open(output_md, 'w') as f:
         f.write(md_content)
     print(f"\n✅ Markdown table saved to: {output_md}")
 
     # Create comparison plot
-    create_comparison_plot(results)
+    create_comparison_plot(results, output_dir)
 
     print("\n" + "=" * 70)
     print("✅ All done!")
